@@ -1,0 +1,6 @@
+# 実行不要の元画像・OS一時ファイルを除外
+assets/raw/
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp

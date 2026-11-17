@@ -1,0 +1,3031 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>玄界灘 — 筑前海の海中</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #042536;
+    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    user-select: none; color: #e2f5ff;
+  }
+  canvas { display: block; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 52%, rgba(1, 10, 18, 0.56) 100%);
+  }
+  #intro {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; pointer-events: none;
+    transition: opacity 2.8s ease; text-shadow: 0 2px 28px rgba(0, 18, 32, 0.85);
+  }
+  #intro h1 {
+    font-weight: 200; letter-spacing: 0.7em; margin: 0 0 12px 0.7em;
+    font-size: clamp(28px, 5vw, 58px);
+  }
+  #intro p {
+    opacity: 0.8; letter-spacing: 0.32em; font-size: 13px; font-weight: 300; margin: 0;
+  }
+  #loading {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: #042536; color: #9cd8f0; letter-spacing: 0.28em; font-size: 13px;
+    transition: opacity 1.1s ease; z-index: 20; pointer-events: none;
+  }
+  #guideLayer {
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden;
+    opacity: 0; transition: opacity 0.4s ease;
+  }
+  #guideLayer.on { opacity: 1; }
+  .tag {
+    position: absolute; transform: translate(-50%, -100%);
+    background: rgba(5, 28, 44, 0.68); border: 1px solid rgba(170, 232, 255, 0.34);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    padding: 5px 10px; border-radius: 10px; white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    transition: opacity 0.2s ease;
+  }
+  .tag b { font-size: 12px; font-weight: 500; color: #eefaff; display: block; letter-spacing: 0.06em; }
+  .tag span { font-size: 10px; color: #9cd6ee; letter-spacing: 0.03em; }
+  .ui {
+    position: fixed; left: 18px; right: 18px; bottom: 16px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+    transition: opacity 1.1s ease; z-index: 10; pointer-events: none;
+  }
+  .ui-group { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; pointer-events: auto; }
+  #hint {
+    color: rgba(210, 240, 255, 0.62); font-size: 11px; letter-spacing: 0.14em; margin-right: 6px;
+  }
+  button {
+    background: rgba(6, 32, 48, 0.56); border: 1px solid rgba(180, 235, 255, 0.24);
+    color: #dcf4ff; padding: 7px 13px; border-radius: 999px; cursor: pointer; font-size: 12px;
+    letter-spacing: 0.04em; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    transition: background 0.25s, border-color 0.25s, transform 0.15s;
+  }
+  button:hover { background: rgba(24, 82, 112, 0.68); border-color: rgba(190, 242, 255, 0.5); }
+  button.active {
+    background: rgba(45, 138, 175, 0.62); border-color: rgba(170, 240, 255, 0.78); color: #ffffff;
+  }
+  body.idle .ui { opacity: 0; }
+  body.idle canvas { cursor: none; }
+  #zoneInfo {
+    position: fixed; left: 18px; top: 16px; max-width: min(640px, calc(100vw - 36px));
+    background: rgba(5, 28, 44, 0.56); border: 1px solid rgba(170, 232, 255, 0.24);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding: 8px 14px; border-radius: 12px; font-size: 12px; line-height: 1.5;
+    color: #dff4ff; letter-spacing: 0.03em; pointer-events: none;
+    transition: opacity 0.6s ease; z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  }
+  body.idle #zoneInfo { opacity: 0.72; }
+  #error {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    color: #cfefff; text-align: center; line-height: 2; z-index: 30; background: #042536;
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="loading">玄界灘の海中を読み込んでいます…</div>
+<div id="vignette"></div>
+<div id="guideLayer"></div>
+<div id="zoneInfo">🌊 玄界灘・筑前海 — 対馬暖流が育む「藻場」「沈み瀬」と、環境変化がもたらす「磯焼け」の3つの生態系</div>
+<div id="intro">
+  <h1>玄界灘</h1>
+  <p>福岡県 筑前海・対馬暖流の海</p>
+</div>
+<div class="ui">
+  <div class="ui-group">
+    <span id="hint">ドラッグで見回す</span>
+    <button data-mode="auto" class="active">🌊 自動遊泳</button>
+    <button data-mode="kelp">🌿 藻場</button>
+    <button data-mode="reef">🪨 沈み瀬</button>
+    <button data-mode="isoyake">🟣 磯焼け</button>
+  </div>
+  <div class="ui-group">
+    <button id="guideBtn">🐟 生き物ガイド</button>
+    <button id="soundBtn">🔇 サウンド</button>
+    <button id="fsBtn">⛶ 全画面</button>
+  </div>
+</div>
+<div id="error">3Dを読み込めませんでした。<br>WebGL 対応ブラウザと接続をご確認ください。</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ---------------------------------------------------------------- renderer & scene
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+
+const SURF = 24.0;
+const WATER_COLOR = new THREE.Color(0x0a4d68);
+const SUN_DIR = new THREE.Vector3(-0.28, 1.0, -0.18).normalize();
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(WATER_COLOR, 0.023);
+
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.12, 950);
+camera.rotation.order = 'YXZ';
+
+// HDR RenderTarget so UnrealBloomPass + underwaterLensPass + OutputPass preserve specular glints
+const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, {
+  type: THREE.HalfFloatType,
+  samples: 4,
+});
+const composer = new EffectComposer(renderer, rt);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.55, 0.85);
+composer.addPass(bloomPass);
+
+const underwaterLensPass = new ShaderPass({
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uSunScreen: { value: new THREE.Vector2(0.5, 0.9) },
+    uSunVis: { value: 0.0 },
+    uRes: { value: new THREE.Vector2(innerWidth, innerHeight) },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse;
+    uniform float uTime, uSunVis;
+    uniform vec2 uSunScreen, uRes;
+    varying vec2 vUv;
+    float hash12(vec2 p){
+      vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+      p3 += dot(p3, p3.yzx + 33.33);
+      return fract((p3.x + p3.y) * p3.z);
+    }
+    void main(){
+      vec2 c = vUv - 0.5;
+      float r2 = dot(c, c);
+      // 微細な水中揺らぎとドームポート特有の周辺色収差
+      vec2 wave = vec2(sin(vUv.y * 14.0 + uTime * 1.15), cos(vUv.x * 11.0 - uTime * 0.92)) * 0.00038;
+      vec2 disp = c * (0.0022 * r2);
+      vec3 col;
+      col.r = texture2D(tDiffuse, clamp(vUv + wave + disp, 0.001, 0.999)).r;
+      col.g = texture2D(tDiffuse, clamp(vUv + wave, 0.001, 0.999)).g;
+      col.b = texture2D(tDiffuse, clamp(vUv + wave - disp, 0.001, 0.999)).b;
+
+      // スクリーンスペース太陽シャフト (上方・太陽方向を向いた際の光芒)
+      if (uSunVis > 0.01) {
+        vec2 rayStep = (uSunScreen - vUv) * 0.105;
+        vec2 suv = vUv;
+        float shaft = 0.0;
+        float w = 1.0;
+        for (int i = 0; i < 8; i++) {
+          suv += rayStep;
+          vec3 s = texture2D(tDiffuse, clamp(suv, 0.001, 0.999)).rgb;
+          float lum = dot(s, vec3(0.2126, 0.7152, 0.0722));
+          shaft += max(lum - 0.72, 0.0) * w;
+          w *= 0.84;
+        }
+        float sunHalo = exp(-length((vUv - uSunScreen) * vec2(uRes.x / max(uRes.y, 1.0), 1.0)) * 2.4);
+        col += vec3(0.24, 0.62, 0.76) * (shaft * 0.068 + sunHalo * 0.055) * uSunVis;
+      }
+
+      // 深海グラデーションのバンディング防止ディザリング
+      col += (hash12(gl_FragCoord.xy + fract(uTime) * 100.0) - 0.5) * 0.006;
+      gl_FragColor = vec4(max(col, 0.0), 1.0);
+    }`,
+});
+composer.addPass(underwaterLensPass);
+composer.addPass(new OutputPass());
+
+const T = underwaterLensPass.uniforms.uTime;
+const fogU = () => THREE.UniformsUtils.clone(THREE.UniformsLib.fog);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rand = mulberry32(20261116);
+const R = (a, b) => a + (b - a) * rand();
+
+// ---------------------------------------------------------------- seabed & 3 zones topology
+// Zone 1 (藻場): (-14, -10), Zone 2 (沈み瀬): (+15, -4), Zone 3 (磯焼け): (-2, +18)
+function gauss2(x, z, cx, cz, sx, sz) {
+  const dx = (x - cx) / sx, dz = (z - cz) / sz;
+  return Math.exp(-(dx * dx + dz * dz));
+}
+
+function floorH(x, z) {
+  const r = Math.hypot(x, z);
+  const sandWave =
+    1.15 * Math.sin(x * 0.042 + 0.4) * Math.cos(z * 0.036) +
+    0.65 * Math.sin((x * 0.72 + z) * 0.085) +
+    0.22 * Math.sin(x * 0.21 - z * 0.17) +
+    0.06 * Math.sin(x * 1.15 + z * 0.85);
+  const kelpShelf = 2.4 * gauss2(x, z, -14, -10, 13, 12);
+  const reefShoal = 4.6 * gauss2(x, z, 15, -4, 11, 10) + 1.8 * gauss2(x, z, 18, -7, 5, 5);
+  const isoyakeBench = 2.2 * gauss2(x, z, -2, 18, 10, 9);
+  const outerRim = Math.max(0, r - 68) * 0.17;
+  return -2.2 + sandWave + kelpShelf + reefShoal + isoyakeBench + outerRim;
+}
+
+function floorNormal(x, z, out = new THREE.Vector3()) {
+  const e = 0.25;
+  const hx = floorH(x + e, z) - floorH(x - e, z);
+  const hz = floorH(x, z + e) - floorH(x, z - e);
+  return out.set(-hx, 2 * e, -hz).normalize();
+}
+
+const CAUSTIC_GLSL = /* glsl */`
+float caustic(vec2 uv, float t){
+  vec2 p = mod(uv * 6.28318, 6.28318) - 250.0;
+  vec2 i = p; float c = 1.0; float inten = 0.0048;
+  for (int n = 0; n < 5; n++) {
+    float tt = t * (1.0 - (3.5 / float(n + 1)));
+    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / inten), p.y / (cos(i.y + tt) / inten)));
+  }
+  c /= 5.0; c = 1.17 - pow(c, 1.4);
+  return clamp(pow(abs(c), 8.0), 0.0, 2.2);
+}
+vec3 causticRGB(vec2 uv, float t){
+  vec2 d = vec2(0.009, 0.006);
+  float r = caustic(uv + d, t) * 0.72 + caustic(uv * 1.9 + d, t * 1.32) * 0.28;
+  float g = caustic(uv, t) * 0.72 + caustic(uv * 1.9, t * 1.32) * 0.28;
+  float b = caustic(uv - d, t) * 0.72 + caustic(uv * 1.9 - d, t * 1.32) * 0.28;
+  return vec3(r, g, b);
+}`;
+
+const ABSORB_GLSL = /* glsl */`
+vec3 absorbWater(vec3 col, float dist){
+  return col * exp(-dist * vec3(0.068, 0.018, 0.008));
+}
+vec3 absorbWaterScatter(vec3 col, vec3 worldPos, vec3 camPos, vec3 sunDir){
+  vec3 dv = worldPos - camPos;
+  float dist = length(dv);
+  vec3 V = dv / max(dist, 0.0001);
+  vec3 att = exp(-dist * vec3(0.068, 0.018, 0.008));
+  float cosT = dot(V, sunDir);
+  float g = 0.62;
+  float hg = (1.0 - g * g) / (4.0 * 3.14159 * pow(max(1.0 + g * g - 2.0 * g * cosT, 0.06), 1.5));
+  float depthAtt = exp(-max(24.0 - worldPos.y, 0.0) * 0.022);
+  vec3 scatterCol = (vec3(0.024, 0.135, 0.205) + vec3(0.08, 0.26, 0.34) * clamp(hg * 1.35, 0.0, 2.2)) * depthAtt;
+  float inscatter = 1.0 - exp(-dist * 0.022);
+  return col * att + scatterCol * inscatter * 0.36;
+}`;
+
+// ---------------------------------------------------------------- lights & water dome
+scene.add(new THREE.HemisphereLight(0x88dcfa, 0x0d2b38, 1.85));
+const sunLight = new THREE.DirectionalLight(0xcbf2ff, 2.45);
+sunLight.position.copy(SUN_DIR).multiplyScalar(60);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 5;
+sunLight.shadow.camera.far = 130;
+sunLight.shadow.camera.left = -45;
+sunLight.shadow.camera.right = 45;
+sunLight.shadow.camera.top = 45;
+sunLight.shadow.camera.bottom = -45;
+sunLight.shadow.bias = -0.0006;
+sunLight.shadow.normalBias = 0.04;
+scene.add(sunLight);
+
+{
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      uTop: { value: new THREE.Color(0x288ca8) },
+      uHor: { value: WATER_COLOR },
+      uBot: { value: new THREE.Color(0x02131c) },
+      uSun: { value: SUN_DIR },
+    },
+    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uTop, uHor, uBot, uSun; varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir); float y = d.y;
+        vec3 col = y > 0.0
+          ? mix(uHor, uTop, pow(smoothstep(0.0, 1.0, y), 0.72))
+          : mix(uHor, uBot, smoothstep(0.0, 0.75, -y));
+        col += vec3(0.18, 0.46, 0.56) * pow(max(dot(d, uSun), 0.0), 7.0) * 0.45;
+        gl_FragColor = vec4(col, 1.0);
+      }`
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(750, 32, 16), skyMat);
+  sky.renderOrder = -1;
+  sky.onBeforeRender = () => sky.position.copy(camera.position);
+  scene.add(sky);
+}
+
+// ---------------------------------------------------------------- water surface (Snell's window) & god rays
+{
+  const surfGeo = new THREE.PlaneGeometry(600, 600, 1, 1);
+  surfGeo.rotateX(Math.PI / 2);
+  const surfMat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide, fog: true,
+    uniforms: { ...fogU(), uTime: T, uSun: { value: SUN_DIR } },
+    vertexShader: `varying vec3 vWorld;
+      #include <fog_pars_vertex>
+      void main(){
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform float uTime; uniform vec3 uSun; varying vec3 vWorld;
+      #include <fog_pars_fragment>
+      ${CAUSTIC_GLSL}
+      float waveH(vec2 p, float t){
+        return sin(p.x * 0.34 + t * 0.85) * 0.35
+             + sin(p.y * 0.27 - t * 0.72) * 0.35
+             + sin((p.x - p.y) * 0.58 + t * 1.25) * 0.22
+             + cos((p.x * 1.4 + p.y * 0.9) * 0.85 - t * 1.65) * 0.12
+             + sin((p.x * 2.3 - p.y * 1.8) * 1.1 + t * 2.15) * 0.06
+             + cos((p.x * 4.1 + p.y * 3.7) * 1.2 - t * 2.7) * 0.03;
+      }
+      void main(){
+        vec3 V = normalize(vWorld - cameraPosition);
+        vec2 p = vWorld.xz;
+        float e = 0.08;
+        float h0 = waveH(p, uTime);
+        vec3 N = normalize(vec3((h0 - waveH(p + vec2(e, 0.0), uTime)) * 0.45, -1.0, (h0 - waveH(p + vec2(0.0, e), uTime)) * 0.45));
+        float cosI = clamp(dot(-V, N), 0.0, 1.0);
+        // 水中(n=1.333)->空気(n=1.0)の臨界角(cos_c ≈ 0.661)によるスネルの窓とフレネル全反射
+        float fres = pow(1.0 - cosI, 4.0);
+        float win = smoothstep(0.58, 0.72, cosI);
+        vec3 c = causticRGB(p * 0.022, uTime * 0.42);
+        vec3 refl = vec3(0.02, 0.14, 0.22) + c * vec3(0.05, 0.10, 0.12) + fres * vec3(0.04, 0.22, 0.30);
+        vec3 sky = vec3(0.46, 0.84, 0.98) + c * vec3(0.28, 0.36, 0.42);
+        vec3 col = mix(refl, sky, win * (1.0 - fres * 0.65));
+        vec3 refrV = normalize(V + N * 0.14);
+        float sunDot = max(dot(refrV, uSun), 0.0);
+        col += (pow(sunDot, 460.0) * 2.6 + pow(sunDot, 32.0) * 0.34) * win;
+        gl_FragColor = vec4(col, 1.0);
+        #include <fog_fragment>
+      }`
+  });
+  const surf = new THREE.Mesh(surfGeo, surfMat);
+  surf.position.y = SURF;
+  surf.onBeforeRender = () => { surf.position.x = camera.position.x; surf.position.z = camera.position.z; };
+  scene.add(surf);
+}
+
+const rays = [];
+{
+  const rayGeo = new THREE.PlaneGeometry(1, 38, 1, 8);
+  rayGeo.translate(0, -19, 0);
+  for (let i = 0; i < 24; i++) {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { uTime: T, uSeed: { value: R(0, 100) }, uOp: { value: R(0.06, 0.16) } },
+      vertexShader: `varying vec2 vUv; varying float vDist;
+        void main(){
+          vUv = uv;
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          wp.xz += vec2(0.28, 0.18) * (${SURF.toFixed(1)} - wp.y);
+          vec4 mv = viewMatrix * wp; vDist = -mv.z;
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `uniform float uTime, uSeed, uOp; varying vec2 vUv; varying float vDist;
+        void main(){
+          float x = abs(vUv.x - 0.5) * 2.0;
+          float edge = smoothstep(1.0, 0.0, x); edge *= edge;
+          float v = pow(vUv.y, 1.75);
+          float fl = 0.55 + 0.45 * sin(uTime * 0.42 + uSeed) * sin(uTime * 0.22 + uSeed * 2.3);
+          float near = smoothstep(2.0, 9.0, vDist) * exp(-vDist * 0.018);
+          float a = edge * v * fl * near * uOp;
+          gl_FragColor = vec4(vec3(0.45, 0.85, 0.98) * a, 1.0);
+        }`
+    });
+    const m = new THREE.Mesh(rayGeo, mat);
+    const a = R(0, 6.28), r = R(2, 48);
+    m.position.set(Math.cos(a) * r - 5, SURF, Math.sin(a) * r - 3);
+    m.scale.x = R(1.8, 6.5);
+    rays.push(m);
+    scene.add(m);
+  }
+}
+
+// ---------------------------------------------------------------- load textures & profiles
+const texLoader = new THREE.TextureLoader();
+function loadTex(url, { srgb = true, repeat = 1, flipY = true } = {}) {
+  return new Promise((resolve, reject) => {
+    texLoader.load(
+      url,
+      t => {
+        t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        t.flipY = flipY;
+        if (repeat !== 1) {
+          t.wrapS = t.wrapT = THREE.RepeatWrapping;
+          t.repeat.set(repeat, repeat);
+        } else {
+          t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+        }
+        t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+        resolve(t);
+      },
+      undefined,
+      reject
+    );
+  });
+}
+
+function patchUnderwaterStandardMat(mat, { key, isRock = false, ripple = false, isBenthic = false, swayAmp = 0 }) {
+  mat.customProgramCacheKey = () => key;
+  mat.onBeforeCompile = shader => {
+    shader.uniforms.uTime = T;
+    shader.uniforms.uSurf = { value: SURF };
+    shader.uniforms.uSun = { value: SUN_DIR };
+
+    const swayBlock = swayAmp > 0
+      ? `float swayH = max(0.0, transformed.y);
+         transformed.x += sin(uTime * 0.9 + uwInstSeed * 6.28 + swayH * 3.5) * ${swayAmp.toFixed(3)} * swayH * swayH;
+         transformed.z += cos(uTime * 0.75 + uwInstSeed * 4.7 + swayH * 3.0) * ${(swayAmp * 0.75).toFixed(3)} * swayH * swayH;`
+      : '';
+
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime;
+        varying vec3 vWorldPos;
+        varying vec3 vWorldN;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float uwInstSeed = 0.0;
+        #ifdef USE_INSTANCING
+          uwInstSeed = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
+        #endif
+        ${swayBlock}`)
+      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+        vec4 uwWp = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          uwWp = instanceMatrix * uwWp;
+        #endif
+        uwWp = modelMatrix * uwWp;
+        vWorldPos = uwWp.xyz;
+        vec3 uwN = objectNormal;
+        #ifdef USE_INSTANCING
+          uwN = mat3(instanceMatrix) * uwN;
+        #endif
+        vWorldN = normalize(mat3(modelMatrix) * uwN);`);
+
+    const noiseGLSL = /* glsl */`
+      float uwHash31(vec3 p){
+        p = fract(p * 0.1031);
+        p += dot(p, p.yzx + 33.33);
+        return fract((p.x + p.y) * p.z);
+      }
+      float uwNoise3(vec3 x){
+        vec3 i = floor(x);
+        vec3 f = fract(x);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(
+          mix(mix(uwHash31(i), uwHash31(i + vec3(1,0,0)), f.x),
+              mix(uwHash31(i + vec3(0,1,0)), uwHash31(i + vec3(1,1,0)), f.x), f.y),
+          mix(mix(uwHash31(i + vec3(0,0,1)), uwHash31(i + vec3(1,0,1)), f.x),
+              mix(uwHash31(i + vec3(0,1,1)), uwHash31(i + vec3(1,1,1)), f.x), f.y),
+          f.z
+        );
+      }
+      float uwFbm3(vec3 p){
+        float v = 0.0, a = 0.5;
+        for (int k = 0; k < 3; k++) { v += a * uwNoise3(p); p *= 2.07; a *= 0.5; }
+        return v;
+      }
+      vec3 uwTriBlend(vec3 n){
+        vec3 b = pow(abs(n), vec3(5.0));
+        return b / max(b.x + b.y + b.z, 0.0001);
+      }
+      vec3 uwTriSample(sampler2D tex, vec3 p, vec3 bw){
+        return texture2D(tex, p.zy).rgb * bw.x + texture2D(tex, p.xz).rgb * bw.y + texture2D(tex, p.xy).rgb * bw.z;
+      }`;
+
+    const surfaceMod = isRock
+      ? /* glsl */`
+        vec3 wnNorm = normalize(vWorldN);
+        float upFace = smoothstep(0.28, 0.85, wnNorm.y);
+        float sideFace = 1.0 - abs(wnNorm.y);
+        float nMac = uwFbm3(vWorldPos * 0.55);
+        float nMic = uwFbm3(vWorldPos * 3.4);
+        float isIsoyake = 1.0 - smoothstep(8.0, 14.5, length(vWorldPos.xz - vec2(-2.0, 18.0)) + (nMac - 0.5) * 3.0);
+        // 微細な岩割れ目の環境遮蔽、上面の珪藻・微細海藻、側面のフジツボ・石灰質、磯焼けの無節サンゴモ
+        float creviceAO = smoothstep(0.24, 0.68, nMic);
+        diffuseColor.rgb *= mix(0.62, 1.08, creviceAO);
+        vec3 turfAlgae = mix(vec3(0.06, 0.11, 0.045), vec3(0.14, 0.19, 0.07), nMic);
+        vec3 barnacleLim = vec3(0.32, 0.34, 0.30);
+        vec3 coralline = mix(vec3(0.34, 0.28, 0.30), vec3(0.47, 0.42, 0.43), smoothstep(0.35, 0.72, nMic));
+        diffuseColor.rgb = mix(diffuseColor.rgb, turfAlgae, upFace * (0.45 + 0.35 * nMac) * (1.0 - isIsoyake));
+        diffuseColor.rgb = mix(diffuseColor.rgb, barnacleLim, sideFace * smoothstep(0.64, 0.82, nMic) * 0.38 * (1.0 - isIsoyake));
+        diffuseColor.rgb = mix(diffuseColor.rgb, coralline, (0.38 + 0.45 * upFace) * smoothstep(0.25, 0.65, nMic) * isIsoyake);`
+      : (ripple
+        ? /* glsl */`
+          float rip = sin(dot(vWorldPos.xz, vec2(0.82, 0.57)) * 3.8 + sin(vWorldPos.x * 0.28 + vWorldPos.z * 0.22) * 2.6);
+          diffuseColor.rgb *= 1.0 + 0.08 * rip;
+          float isoSand = 1.0 - smoothstep(9.0, 16.0, length(vWorldPos.xz - vec2(-2.0, 18.0)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.15, isoSand * 0.35);`
+        : (isBenthic
+          ? /* glsl */`
+            float bn = uwFbm3(vWorldPos * 16.0);
+            float bCalc = smoothstep(0.62, 0.84, uwFbm3(vWorldPos * 28.0));
+            diffuseColor.rgb *= mix(0.76, 1.24, bn);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.33, 0.34), bCalc * 0.26);`
+          : ''));
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime, uSurf;
+        uniform vec3 uSun;
+        varying vec3 vWorldPos;
+        varying vec3 vWorldN;
+        ${noiseGLSL}
+        ${CAUSTIC_GLSL}
+        ${ABSORB_GLSL}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        ${surfaceMod}`);
+
+    if (isRock) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <map_fragment>', `#include <map_fragment>
+          #ifdef USE_MAP
+            vec3 triBW = uwTriBlend(normalize(vWorldN));
+            vec3 triP1 = vWorldPos * 0.26;
+            vec3 triP2 = vWorldPos * 0.88;
+            vec3 rockC1 = uwTriSample(map, triP1, triBW);
+            vec3 rockC2 = uwTriSample(map, triP2, triBW);
+            diffuseColor.rgb = mix(rockC1, rockC2, 0.42);
+          #endif`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+          #ifdef USE_ROUGHNESSMAP
+            vec3 triBWr = uwTriBlend(normalize(vWorldN));
+            vec3 arm1 = uwTriSample(roughnessMap, vWorldPos * 0.26, triBWr);
+            vec3 arm2 = uwTriSample(roughnessMap, vWorldPos * 0.88, triBWr);
+            vec3 armMix = mix(arm1, arm2, 0.42);
+            roughnessFactor = roughness * armMix.g;
+            diffuseColor.rgb *= mix(0.45, 1.08, armMix.r);
+          #endif`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          #ifdef USE_NORMALMAP
+            vec3 baseWN = normalize(vWorldN);
+            vec3 triBWn = uwTriBlend(baseWN);
+            vec3 pN1 = vWorldPos * 0.26;
+            vec3 pN2 = vWorldPos * 0.88;
+            vec3 tX = mix(texture2D(normalMap, pN1.zy).xyz, texture2D(normalMap, pN2.zy).xyz, 0.45) * 2.0 - 1.0;
+            vec3 tY = mix(texture2D(normalMap, pN1.xz).xyz, texture2D(normalMap, pN2.xz).xyz, 0.45) * 2.0 - 1.0;
+            vec3 tZ = mix(texture2D(normalMap, pN1.xy).xyz, texture2D(normalMap, pN2.xy).xyz, 0.45) * 2.0 - 1.0;
+            vec3 nX = vec3(baseWN.x, tX.y * 0.72 + baseWN.y, tX.x * 0.72 + baseWN.z);
+            vec3 nY = vec3(tY.x * 0.72 + baseWN.x, baseWN.y, tY.y * 0.72 + baseWN.z);
+            vec3 nZ = vec3(tZ.x * 0.72 + baseWN.x, tZ.y * 0.72 + baseWN.y, baseWN.z);
+            vec3 pertWN = normalize(nX * triBWn.x + nY * triBWn.y + nZ * triBWn.z);
+            normal = normalize((viewMatrix * vec4(pertWN, 0.0)).xyz);
+          #endif`);
+    } else if (isBenthic) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          float be = 0.015;
+          float b0 = uwFbm3(vWorldPos * 26.0);
+          vec3 bGrad = vec3(
+            uwFbm3((vWorldPos + vec3(be, 0.0, 0.0)) * 26.0) - b0,
+            uwFbm3((vWorldPos + vec3(0.0, be, 0.0)) * 26.0) - b0,
+            uwFbm3((vWorldPos + vec3(0.0, 0.0, be)) * 26.0) - b0
+          ) * 2.4;
+          normal = normalize(normal - (viewMatrix * vec4(bGrad, 0.0)).xyz);`);
+    }
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <opaque_fragment>', `
+        vec3 uwN = normalize(vWorldN);
+        float sunFace = clamp(dot(uwN, uSun), 0.0, 1.0);
+        float depthFac = exp(-max(uSurf - vWorldPos.y, 0.0) * 0.036);
+        vec2 cuv = vWorldPos.xz * 0.052 + uSun.xz * (uSurf - vWorldPos.y) * 0.03;
+        vec3 caRgb = causticRGB(cuv, uTime * 0.48);
+        outgoingLight += diffuseColor.rgb * vec3(0.45, 0.74, 0.80) * caRgb * sunFace * depthFac * 0.85;
+        outgoingLight = absorbWaterScatter(outgoingLight, vWorldPos, cameraPosition, uSun);
+        #include <opaque_fragment>`);
+  };
+}
+
+// ---------------------------------------------------------------- build fish 3D geometry
+function sampleProfileThick(profile, u, v) {
+  const { nx, ny, thick } = profile;
+  const fx = THREE.MathUtils.clamp(u, 0, 1) * (nx - 1);
+  const fy = THREE.MathUtils.clamp(1 - v, 0, 1) * (ny - 1);
+  const x0 = Math.floor(fx), x1 = Math.min(x0 + 1, nx - 1);
+  const y0 = Math.floor(fy), y1 = Math.min(y0 + 1, ny - 1);
+  const tx = fx - x0, ty = fy - y0;
+  const t00 = thick[y0][x0], t10 = thick[y0][x1];
+  const t01 = thick[y1][x0], t11 = thick[y1][x1];
+  return (t00 * (1 - tx) + t10 * tx) * (1 - ty) + (t01 * (1 - tx) + t11 * tx) * ty;
+}
+
+function buildReliefGeo(profile, width, heightScale, segU = 36, segV = 24) {
+  const geo = new THREE.PlaneGeometry(width, width * profile.aspect, segU, segV);
+  geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position;
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const u = uv.getX(i), v = uv.getY(i);
+    // 微小近傍平滑によりアワビ呼吸孔等の局所的凹みを緩和しつつドーム厚みを生成
+    const tSmooth = (
+      sampleProfileThick(profile, u, v) * 2
+      + sampleProfileThick(profile, u - 0.03, v)
+      + sampleProfileThick(profile, u + 0.03, v)
+      + sampleProfileThick(profile, u, v - 0.03)
+      + sampleProfileThick(profile, u, v + 0.03)
+    ) / 6;
+    p.setY(i, Math.pow(Math.max(0, tSmooth - 0.02), 0.85) * heightScale);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function makeBenthicReliefMat(tex, key, { roughness = 0.62, metalness = 0.04, isBenthic = true } = {}) {
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex,
+    alphaTest: 0.35,
+    side: THREE.DoubleSide,
+    roughness,
+    metalness,
+  });
+  patchUnderwaterStandardMat(mat, { key, isBenthic });
+  return mat;
+}
+
+function buildFishGeo(profile, thicknessScale = 0.19) {
+  const segU = 40, segV = 20;
+  const { aspect } = profile;
+  const halfW = thicknessScale * 0.5;
+
+  const bPos = [], bUvs = [], bIdx = [], bMeta = [];
+  // side = +1 (right flank, normal +X) and side = -1 (left flank, normal -X)
+  for (let s = 0; s < 2; s++) {
+    const sign = s === 0 ? 1 : -1;
+    const base = (segU + 1) * (segV + 1) * s;
+    for (let iv = 0; iv <= segV; iv++) {
+      const v = iv / segV;
+      const y = (v - 0.5) * aspect;
+      for (let iu = 0; iu <= segU; iu++) {
+        const u = iu / segU;
+        const z = u - 0.5; // -0.5=尾, +0.5=頭 (+Zが進行方向)
+        const rawT = sampleProfileThick(profile, u, v);
+        // 最小分離厚みを保証して鰭のZ-fightingを解消
+        const t = Math.max(rawT, 0.018);
+        bPos.push(sign * halfW * t, y, z);
+        bUvs.push(u, v);
+        bMeta.push(u, v, rawT, sign);
+      }
+    }
+    for (let iv = 0; iv < segV; iv++) {
+      for (let iu = 0; iu < segU; iu++) {
+        const a = base + iv * (segU + 1) + iu;
+        const b = a + 1;
+        const c = a + (segU + 1);
+        const d = c + 1;
+        if (sign > 0) bIdx.push(a, c, b, b, c, d);
+        else bIdx.push(a, b, c, b, d, c);
+      }
+    }
+  }
+
+  // 本体メッシュから幾何法線を算出し、楕円体解剖学法線と滑らかに融合
+  const bodyGeo = new THREE.BufferGeometry();
+  bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
+  bodyGeo.setIndex(bIdx);
+  bodyGeo.computeVertexNormals();
+  const bnAttr = bodyGeo.attributes.normal;
+  const finalNrm = [];
+  const finalPec = [];
+  const nv = new THREE.Vector3();
+  for (let i = 0; i < bnAttr.count; i++) {
+    const u = bMeta[i * 4];
+    const v = bMeta[i * 4 + 1];
+    const rawT = bMeta[i * 4 + 2];
+    const sign = bMeta[i * 4 + 3];
+    const gx = bnAttr.getX(i), gy = bnAttr.getY(i), gz = bnAttr.getZ(i);
+    const bodyBlend = THREE.MathUtils.smoothstep(rawT, 0.08, 0.34);
+    const ellX = sign * (0.32 + 0.68 * Math.sqrt(Math.max(rawT, 0.02)));
+    const ellY = (v - 0.5) * 1.38 * (1.0 - rawT * 0.52);
+    const ellZ = Math.max(0, (u - 0.68) / 0.32) * 0.42 * (1.0 - rawT * 0.45);
+    nv.set(ellX, ellY, ellZ).normalize();
+    const nx = THREE.MathUtils.lerp(sign * 0.96, THREE.MathUtils.lerp(gx, nv.x, 0.52), bodyBlend);
+    const ny = THREE.MathUtils.lerp(gy * 0.25, THREE.MathUtils.lerp(gy, nv.y, 0.52), bodyBlend);
+    const nz = THREE.MathUtils.lerp(gz * 0.25, THREE.MathUtils.lerp(gz, nv.z, 0.52), bodyBlend);
+    nv.set(nx, ny, nz).normalize();
+    finalNrm.push(nv.x, nv.y, nv.z);
+    finalPec.push(0, 0);
+  }
+
+  // 左右対の一対の3D胸鰭カード (u ≈ 0.72, v ≈ 0.42 鰓蓋後方から扇状に張り出す)
+  const segPU = 5, segPV = 4;
+  const tBase = Math.max(sampleProfileThick(profile, 0.71, 0.41), 0.32);
+  let vCursor = bPos.length / 3;
+  for (let s = 0; s < 2; s++) {
+    const sign = s === 0 ? 1 : -1;
+    const pBase = vCursor;
+    for (let ipv = 0; ipv <= segPV; ipv++) {
+      const py = (ipv / segPV) * 2 - 1; // -1..+1
+      for (let ipu = 0; ipu <= segPU; ipu++) {
+        const px = ipu / segPU; // 0(付根)..1(先端)
+        const dv = (0.022 + 0.048 * Math.sin(px * Math.PI * 0.78)) * Math.sqrt(Math.max(0.12, 1 - Math.pow(px * 0.5, 2)));
+        const uFin = 0.71 - px * 0.155 * (0.72 + 0.28 * Math.cos(py * Math.PI * 0.5)) + py * 0.012 * px;
+        const vFin = 0.41 - px * 0.024 + py * dv;
+        const x = sign * (halfW * tBase * (1.0 - px * 0.08) + px * 0.082 * aspect);
+        const y = (vFin - 0.5) * aspect;
+        const z = uFin - 0.5;
+        bPos.push(x, y, z);
+        bUvs.push(THREE.MathUtils.clamp(uFin, 0, 1), THREE.MathUtils.clamp(vFin, 0, 1));
+        nv.set(sign * 0.96, py * 0.18, 0.16).normalize();
+        finalNrm.push(nv.x, nv.y, nv.z);
+        const radial = Math.hypot((px - 0.38) / 0.68, py);
+        finalPec.push(sign * (0.01 + px * 0.99), radial);
+        vCursor++;
+      }
+    }
+    for (let ipv = 0; ipv < segPV; ipv++) {
+      for (let ipu = 0; ipu < segPU; ipu++) {
+        const a = pBase + ipv * (segPU + 1) + ipu;
+        const b = a + 1;
+        const c = a + (segPU + 1);
+        const d = c + 1;
+        if (sign > 0) bIdx.push(a, b, c, b, d, c);
+        else bIdx.push(a, c, b, b, c, d);
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(finalNrm, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(bUvs, 2));
+  geo.setAttribute('aPec', new THREE.Float32BufferAttribute(finalPec, 2));
+  geo.setIndex(bIdx);
+  return geo;
+}
+
+function makeFishMat(tex, spec = 0.3) {
+  return new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    fog: true,
+    alphaToCoverage: true,
+    uniforms: {
+      ...fogU(),
+      uTime: T,
+      uMap: { value: tex },
+      uSun: { value: SUN_DIR },
+      uSurf: { value: SURF },
+      uSpec: { value: spec },
+    },
+    vertexShader: `attribute float aPhase; attribute float aSpeed; attribute float aAmp; attribute float aTint; attribute vec2 aPec;
+      uniform float uTime;
+      varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec3 vLocal; varying float vTint; varying vec2 vPec;
+      #include <fog_pars_vertex>
+      void main(){
+        vUv = uv; vTint = aTint; vLocal = position; vPec = aPec;
+        vec3 p = position;
+        // 生物力学的 Carangiform 遊泳: 尾側進行波 + 頭部の微小なカウンターヨー
+        float tailFlex = smoothstep(0.34, -0.5, p.z);
+        float headFlex = smoothstep(0.16, 0.5, p.z);
+        float ph = uTime * aSpeed + aPhase * 6.28318;
+        p.x += (sin(ph - p.z * 5.8) * tailFlex - sin(ph - 0.6) * headFlex * 0.16) * aAmp;
+        // 3D胸鰭の独立羽ばたき (ホバリング種・静止個体の微細な胸鰭煽りを含む)
+        if (abs(aPec.x) > 0.0005) {
+          float pSign = sign(aPec.x);
+          float pTip = abs(aPec.x);
+          float scull = sin(uTime * max(aSpeed * 0.85, 5.2) + aPhase * 6.28318 + pSign * 0.35);
+          p.x += pSign * scull * 0.026 * pTip;
+          p.z -= scull * 0.008 * pTip;
+        }
+        vec4 wp = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        vWorld = wp.xyz;
+        vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D uMap; uniform float uTime, uSurf, uSpec; uniform vec3 uSun;
+      varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec3 vLocal; varying float vTint; varying vec2 vPec;
+      #include <fog_pars_fragment>
+      ${CAUSTIC_GLSL}
+      ${ABSORB_GLSL}
+      void main(){
+        vec4 texel = texture2D(uMap, vUv);
+        float alpha = smoothstep(0.14, 0.62, texel.a);
+        if (abs(vPec.x) > 0.0005) {
+          alpha *= smoothstep(1.02, 0.45, vPec.y) * smoothstep(0.0, 0.22, abs(vPec.x)) * 0.72;
+        }
+        if (alpha < 0.10) discard;
+        // テクスチャ輝度勾配 + 六角形鱗パターンからのプロシージャル法線バンプ
+        float eps = 0.0022;
+        float lumC = dot(texel.rgb, vec3(0.3, 0.59, 0.11));
+        float lumX = dot(texture2D(uMap, vUv + vec2(eps, 0.0)).rgb, vec3(0.3, 0.59, 0.11));
+        float lumY = dot(texture2D(uMap, vUv + vec2(0.0, eps)).rgb, vec3(0.3, 0.59, 0.11));
+        float scU = sin(vUv.x * 165.0) * sin(vUv.y * 85.0 + sin(vUv.x * 82.5));
+        vec3 n = normalize(vN);
+        if (!gl_FrontFacing) n = -n;
+        n = normalize(n + vec3(0.0, (lumC - lumY) * 0.65, (lumC - lumX) * 0.65) + vec3(0.0, scU * 0.04, scU * 0.03));
+
+        vec3 V = normalize(cameraPosition - vWorld);
+        float diff = clamp(dot(n, uSun), 0.0, 1.0);
+        float skyWrap = 0.5 + 0.5 * n.y;
+        float depthFac = exp(-max(uSurf - vWorld.y, 0.0) * 0.034);
+        vec3 col = texel.rgb * (0.94 + vTint * 0.12);
+        // 砂底バウンスライト (腹側下向き法線への暖かい青緑照り返し)
+        vec3 bounceCol = vec3(0.24, 0.46, 0.44) * max(-n.y, 0.0) * (0.45 + 0.55 * depthFac);
+        vec3 lit = col * (vec3(0.24, 0.42, 0.52) * skyWrap + vec3(0.78, 0.95, 1.0) * diff * 0.88 * depthFac + bounceCol);
+
+        // 体側・背中への色収差コースティクス
+        vec3 ca = causticRGB(vWorld.xz * 0.075, uTime * 0.52);
+        lit += col * vec3(0.38, 0.68, 0.76) * ca * smoothstep(-0.18, 0.65, n.y) * depthFac * 0.45;
+
+        // デュアルローブ・スペキュラ: 広角グアニン構造色 + 鋭い粘膜クリアコート (pow 96)
+        vec3 H = normalize(uSun + V);
+        float ndh = max(dot(n, H), 0.0);
+        float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+        vec3 irid = mix(vec3(0.70, 0.94, 1.0), vec3(0.86, 0.92, 1.0), 0.5 + 0.5 * sin(dot(n, V) * 9.0 + vUv.x * 8.0));
+        float broadSpec = (pow(ndh, 18.0) * 0.65 + pow(ndh, 6.0) * 0.15) * uSpec * depthFac;
+        float clearcoatSpec = pow(ndh, 96.0) * 1.15 * mix(0.35, 1.0, diff) * (0.35 + uSpec) * depthFac;
+        lit += irid * broadSpec * (0.75 + 0.65 * fres) + vec3(0.84, 0.97, 1.0) * clearcoatSpec * (0.65 + 0.55 * fres);
+
+        // 鰭・体縁の逆光サブサーフェス・スキャタリング (SSS)
+        float backLight = pow(clamp(dot(-V, uSun), 0.0, 1.0), 2.8);
+        float pecBonus = step(0.0005, abs(vPec.x)) * 0.55;
+        float finThin = smoothstep(0.88, 0.25, texel.a) + smoothstep(0.22, 0.0, abs(vUv.y - 0.5)) * 0.14 + pecBonus;
+        lit += col * vec3(0.55, 0.88, 0.95) * (backLight * 0.45 + fres * 0.26) * clamp(finThin, 0.12, 1.0) * depthFac;
+
+        lit = absorbWaterScatter(lit, vWorld, cameraPosition, uSun);
+        gl_FragColor = vec4(lit, clamp(alpha, 0.0, 1.0));
+        #include <fog_fragment>
+      }`
+  });
+}
+
+// ---------------------------------------------------------------- custom 3D: ムラサキウニ, アオリイカ, ミズクラゲ
+function createUrchins(rayHeight, surfaceAt, isoyakeRocks) {
+  const dome = new THREE.SphereGeometry(0.11, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.65);
+  dome.scale(1, 0.65, 1);
+  const parts = [dome];
+  const spineBase = new THREE.ConeGeometry(0.007, 0.16, 5);
+  spineBase.translate(0, 0.08, 0);
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const dir = new THREE.Vector3();
+  const rings = [5, 10, 14, 18, 14];
+  rings.forEach((cnt, ri) => {
+    const phi = (ri + 0.35) / rings.length * (Math.PI * 0.52);
+    for (let k = 0; k < cnt; k++) {
+      const th = (k / cnt + ri * 0.17) * Math.PI * 2 + R(-0.08, 0.08);
+      dir.set(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th)).normalize();
+      const s = spineBase.clone();
+      const lenS = R(0.84, 1.16);
+      s.scale(1, lenS, 1);
+      q.setFromUnitVectors(up, dir);
+      s.applyQuaternion(q);
+      s.translate(dir.x * 0.082, dir.y * 0.055, dir.z * 0.082);
+      parts.push(s);
+    }
+  });
+  const geo = mergeGeometries(parts);
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(0x1f0d2b),
+    roughness: 0.42,
+    metalness: 0.1,
+  });
+  patchUnderwaterStandardMat(mat, { key: 'uw_urchin', isRock: false, ripple: false });
+
+  // 磯焼け域 (-2, +18) の岩盤上のみに限定し、適正個体数 (28個体) ・実寸スケール (12〜18cm相当) で配置
+  const N = 28;
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  const d = new THREE.Object3D();
+  const hitPos = new THREE.Vector3();
+  const nrm = new THREE.Vector3();
+  const iq = new THREE.Quaternion();
+  const centerAccum = new THREE.Vector3();
+  let centerCount = 0;
+  for (let i = 0; i < N; i++) {
+    let x = -2, z = 18, found = false;
+    for (let tries = 0; tries < 200; tries++) {
+      const a = R(0, Math.PI * 2), r = Math.sqrt(rand()) * 10.5;
+      const tx = -2 + Math.cos(a) * r;
+      const tz = 18 + Math.sin(a) * r;
+      if (rayHeight(tx, tz) - floorH(tx, tz) > 0.18) {
+        surfaceAt(tx, tz, hitPos, nrm);
+        if (nrm.y > 0.25) { x = tx; z = tz; found = true; break; }
+      }
+    }
+    if (!found && isoyakeRocks.length) {
+      const rk = isoyakeRocks[i % isoyakeRocks.length];
+      x = rk.x + R(-0.42, 0.42) * rk.sx;
+      z = rk.z + R(-0.42, 0.42) * rk.sz;
+      surfaceAt(x, z, hitPos, nrm);
+    }
+    d.position.copy(hitPos).addScaledVector(nrm, 0.015);
+    iq.setFromUnitVectors(up, nrm);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.setScalar(R(0.38, 0.58));
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+    centerAccum.add(d.position);
+    centerCount++;
+  }
+  scene.add(mesh);
+  const center = centerCount ? centerAccum.divideScalar(centerCount) : new THREE.Vector3(-2, floorH(-2, 18) + 1.0, 18);
+  return { center };
+}
+
+function createSquids(aoriikaTex, profile) {
+  // アオリイカ (ミズイカ): 実写テクスチャ＋3D外套膜厚み・エンペラ波動・腕揺動・半透明クロマトフォアシェーディング
+  const segU = 38, segV = 20;
+  const { aspect } = profile;
+  const halfH = 0.088;
+
+  const pos = [], uvs = [], idx = [], meta = [];
+  for (let s = 0; s < 2; s++) {
+    const sign = s === 0 ? 1 : -1;
+    const base = (segU + 1) * (segV + 1) * s;
+    for (let iv = 0; iv <= segV; iv++) {
+      const v = iv / segV;
+      const x = (v - 0.5) * aspect;
+      for (let iu = 0; iu <= segU; iu++) {
+        const u = iu / segU;
+        const z = u - 0.5; // -0.5=外套先端, +0.5=触腕
+        const rawT = sampleProfileThick(profile, u, v);
+        const t = Math.max(rawT, 0.015);
+        pos.push(x, sign * halfH * t, z);
+        uvs.push(u, v);
+        meta.push(u, v, rawT, sign);
+      }
+    }
+    for (let iv = 0; iv < segV; iv++) {
+      for (let iu = 0; iu < segU; iu++) {
+        const a = base + iv * (segU + 1) + iu;
+        const b = a + 1;
+        const c = a + (segU + 1);
+        const d = c + 1;
+        if (sign > 0) idx.push(a, b, c, b, d, c);
+        else idx.push(a, c, b, b, c, d);
+      }
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const nAttr = geo.attributes.normal;
+  const nv = new THREE.Vector3();
+  for (let i = 0; i < nAttr.count; i++) {
+    const u = meta[i * 4], v = meta[i * 4 + 1], rawT = meta[i * 4 + 2], sign = meta[i * 4 + 3];
+    const bodyBlend = THREE.MathUtils.smoothstep(rawT, 0.06, 0.30);
+    const ellX = (v - 0.5) * 1.45 * (1.0 - rawT * 0.5);
+    const ellY = sign * (0.32 + 0.68 * Math.sqrt(Math.max(rawT, 0.02)));
+    const ellZ = (u - 0.35) * 0.30 * (1.0 - rawT * 0.4);
+    nv.set(ellX, ellY, ellZ).normalize();
+    const gx = nAttr.getX(i), gy = nAttr.getY(i), gz = nAttr.getZ(i);
+    nAttr.setXYZ(
+      i,
+      THREE.MathUtils.lerp(gx * 0.35, THREE.MathUtils.lerp(gx, nv.x, 0.5), bodyBlend),
+      THREE.MathUtils.lerp(sign * 0.96, THREE.MathUtils.lerp(gy, nv.y, 0.5), bodyBlend),
+      THREE.MathUtils.lerp(gz * 0.35, THREE.MathUtils.lerp(gz, nv.z, 0.5), bodyBlend)
+    );
+  }
+  geo.normalizeNormals();
+
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    fog: true,
+    alphaToCoverage: true,
+    uniforms: { ...fogU(), uTime: T, uMap: { value: aoriikaTex }, uSun: { value: SUN_DIR }, uSurf: { value: SURF } },
+    vertexShader: `uniform float uTime; attribute float aPhase;
+      varying vec2 vUv; varying vec3 vN; varying vec3 vWorld; varying float vPhase;
+      #include <fog_pars_vertex>
+      void main(){
+        vUv = uv; vPhase = aPhase;
+        vec3 p = position;
+        float finEdge = smoothstep(0.065, 0.21, abs(p.x)) * smoothstep(0.26, -0.05, p.z);
+        p.y += sin(uTime * 5.2 + aPhase * 6.28318 - p.z * 9.5) * 0.055 * finEdge;
+        float armK = smoothstep(0.16, 0.50, p.z);
+        p.y += sin(uTime * 2.5 + aPhase * 6.28318 - armK * 3.2) * 0.030 * armK;
+        p.x += cos(uTime * 1.9 + aPhase * 6.28318 - armK * 2.4) * 0.018 * armK;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        vWorld = wp.xyz;
+        vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D uMap; uniform vec3 uSun; uniform float uTime, uSurf;
+      varying vec2 vUv; varying vec3 vN; varying vec3 vWorld; varying float vPhase;
+      #include <fog_pars_fragment>
+      ${CAUSTIC_GLSL}
+      ${ABSORB_GLSL}
+      void main(){
+        vec4 texel = texture2D(uMap, vUv);
+        float alpha = smoothstep(0.14, 0.60, texel.a);
+        if (alpha < 0.10) discard;
+        float eps = 0.0024;
+        float lC = dot(texel.rgb, vec3(0.3, 0.59, 0.11));
+        float lX = dot(texture2D(uMap, vUv + vec2(eps, 0.0)).rgb, vec3(0.3, 0.59, 0.11));
+        float lY = dot(texture2D(uMap, vUv + vec2(0.0, eps)).rgb, vec3(0.3, 0.59, 0.11));
+        vec3 n = normalize(vN);
+        if (!gl_FrontFacing) n = -n;
+        n = normalize(n + vec3((lC - lY) * 0.42, 0.0, (lC - lX) * 0.42));
+
+        vec3 V = normalize(cameraPosition - vWorld);
+        float depthFac = exp(-max(uSurf - vWorld.y, 0.0) * 0.034);
+        float diff = clamp(dot(n, uSun), 0.0, 1.0);
+        float skyWrap = 0.5 + 0.5 * n.y;
+        // 生きているアオリイカの虹色色素胞(クロマトフォア)ゆらぎ
+        float chroma = 0.5 + 0.5 * sin(uTime * 2.6 + vPhase * 6.283 + vUv.x * 14.0 + vUv.y * 10.0);
+        vec3 baseCol = mix(texel.rgb, texel.rgb * vec3(0.92, 1.04, 1.08), chroma * 0.28);
+        vec3 bounceCol = vec3(0.24, 0.46, 0.44) * max(-n.y, 0.0) * (0.45 + 0.55 * depthFac);
+        vec3 lit = baseCol * (vec3(0.26, 0.44, 0.54) * skyWrap + vec3(0.78, 0.95, 1.0) * diff * 0.86 * depthFac + bounceCol);
+
+        vec3 ca = causticRGB(vWorld.xz * 0.072, uTime * 0.50);
+        lit += baseCol * vec3(0.38, 0.70, 0.78) * ca * smoothstep(-0.1, 0.7, n.y) * depthFac * 0.48;
+
+        vec3 H = normalize(uSun + V);
+        float ndh = max(dot(n, H), 0.0);
+        float fres = pow(1.0 - max(dot(n, V), 0.0), 2.4);
+        vec3 irid = mix(vec3(0.45, 0.90, 1.0), vec3(0.88, 0.82, 1.0), chroma);
+        lit += irid * (pow(ndh, 16.0) * 0.28 + pow(ndh, 72.0) * 0.55) * depthFac;
+
+        // 半透明外套膜・エンペラの透過 SSS
+        float backLight = pow(clamp(dot(-V, uSun), 0.0, 1.0), 2.4);
+        float rimThin = smoothstep(0.90, 0.30, texel.a) + smoothstep(0.18, 0.0, abs(vUv.y - 0.5)) * 0.15;
+        lit += mix(baseCol, vec3(0.42, 0.88, 0.96), 0.45) * (backLight * 0.58 + fres * 0.42) * clamp(rimThin, 0.25, 1.0) * depthFac;
+
+        lit = absorbWaterScatter(lit, vWorld, cameraPosition, uSun);
+        gl_FragColor = vec4(lit, clamp(alpha, 0.0, 1.0));
+        #include <fog_fragment>
+      }`
+  });
+
+  const N = 7;
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  mesh.frustumCulled = false;
+  const ph = new Float32Array(N);
+  const squids = [];
+  for (let i = 0; i < N; i++) {
+    ph[i] = rand();
+    squids.push({
+      off: new THREE.Vector3((i - 3) * 0.85 + R(-0.2, 0.2), R(-0.5, 0.5), -Math.abs(i - 3) * 0.65 + R(-0.2, 0.2)),
+      scale: R(0.68, 0.92),
+      dir: new THREE.Vector3(1, 0, 0),
+    });
+  }
+  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1));
+  scene.add(mesh);
+
+  const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3(), d = new THREE.Object3D();
+  function path(t, out) {
+    return out.set(Math.sin(t * 0.048) * 15 + 0.5, 5.2 + Math.sin(t * 0.12) * 0.9, Math.cos(t * 0.042) * 10 - 6.5);
+  }
+  return {
+    update(t) {
+      squids.forEach((sq, i) => {
+        path(t, tmpA).add(sq.off);
+        path(t + 0.15, tmpB).add(sq.off);
+        tmpC.subVectors(tmpB, tmpA);
+        if (tmpC.lengthSq() > 1e-8) sq.dir.lerp(tmpC.normalize(), 0.08).normalize();
+        d.position.copy(tmpA);
+        d.lookAt(tmpC.copy(tmpA).add(sq.dir));
+        d.scale.setScalar(sq.scale);
+        d.updateMatrix();
+        mesh.setMatrixAt(i, d.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    },
+    getAnchorPos(out) { return path(T.value, out); }
+  };
+}
+
+function makeMoonJellyTextures() {
+  // 1. 傘(ベル)テクスチャ: ガラス透明ベース＋繊細な16本分岐放射管＋縁感覚器(ロパリア)
+  const S = 512;
+  const bCvs = document.createElement('canvas');
+  bCvs.width = S; bCvs.height = S;
+  const bCtx = bCvs.getContext('2d');
+  const cx = S * 0.5, cy = S * 0.5, Rmax = S * 0.48;
+
+  // ゼラチン質メソグレア: 中心は完全な透明度を保ち、ごく薄い外縁のみに乳白膜
+  const radG = bCtx.createRadialGradient(cx, cy, Rmax * 0.05, cx, cy, Rmax);
+  radG.addColorStop(0.0, 'rgba(140, 212, 244, 0.00)');
+  radG.addColorStop(0.74, 'rgba(155, 222, 248, 0.02)');
+  radG.addColorStop(0.90, 'rgba(182, 232, 252, 0.14)');
+  radG.addColorStop(0.96, 'rgba(205, 240, 255, 0.28)');
+  radG.addColorStop(1.0, 'rgba(180, 230, 250, 0.0)');
+  bCtx.fillStyle = radG;
+  bCtx.fillRect(0, 0, S, S);
+
+  // 分岐する細密な胃水管系・放射管ネットワーク
+  bCtx.save();
+  bCtx.strokeStyle = 'rgba(195, 235, 252, 0.42)';
+  bCtx.lineWidth = 1.25;
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const r0 = Rmax * 0.24, r1 = Rmax * 0.62, r2 = Rmax * 0.94;
+    bCtx.beginPath();
+    bCtx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    bCtx.quadraticCurveTo(
+      cx + Math.cos(a + 0.04) * r1, cy + Math.sin(a + 0.04) * r1,
+      cx + Math.cos(a) * r2, cy + Math.sin(a) * r2
+    );
+    bCtx.stroke();
+    if (i % 2 === 0) {
+      for (const sgn of [-1, 1]) {
+        const ab = a + sgn * 0.14;
+        bCtx.beginPath();
+        bCtx.moveTo(cx + Math.cos(a) * (Rmax * 0.48), cy + Math.sin(a) * (Rmax * 0.48));
+        bCtx.quadraticCurveTo(
+          cx + Math.cos(a + sgn * 0.09) * (Rmax * 0.74), cy + Math.sin(a + sgn * 0.09) * (Rmax * 0.74),
+          cx + Math.cos(ab) * r2, cy + Math.sin(ab) * r2
+        );
+        bCtx.stroke();
+      }
+    }
+  }
+  // 8箇所の傘縁感覚器 (ロパリア)
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    const rx = cx + Math.cos(a) * (Rmax * 0.92), ry = cy + Math.sin(a) * (Rmax * 0.92);
+    const rg = bCtx.createRadialGradient(rx, ry, 1, rx, ry, 9);
+    rg.addColorStop(0, 'rgba(255, 218, 210, 0.85)');
+    rg.addColorStop(0.5, 'rgba(195, 232, 250, 0.35)');
+    rg.addColorStop(1, 'rgba(195, 232, 250, 0.0)');
+    bCtx.fillStyle = rg;
+    bCtx.beginPath(); bCtx.arc(rx, ry, 9, 0, Math.PI * 2); bCtx.fill();
+  }
+  bCtx.restore();
+
+  // 2. 口腕レーステクスチャ (柔らかな透け感のフリルと淡桃紫の刺胞縁)
+  const AW = 256, AH = 512;
+  const aCvs = document.createElement('canvas');
+  aCvs.width = AW; aCvs.height = AH;
+  const aCtx = aCvs.getContext('2d');
+  for (let y = 0; y < AH; y++) {
+    const v = y / (AH - 1);
+    const taper = Math.sin(v * Math.PI * 0.85 + 0.18) * (1.0 - v * 0.38);
+    const wave = Math.sin(v * 34.0) * 0.16 + Math.cos(v * 62.0) * 0.09;
+    const halfSpan = AW * (0.36 * taper + 0.04);
+    const cxRow = AW * 0.5 + wave * AW * 0.11;
+    const rg = aCtx.createLinearGradient(cxRow - halfSpan, y, cxRow + halfSpan, y);
+    rg.addColorStop(0.0, 'rgba(200, 230, 250, 0.0)');
+    rg.addColorStop(0.22, 'rgba(220, 236, 252, 0.24)');
+    rg.addColorStop(0.5, 'rgba(246, 218, 238, 0.62)');
+    rg.addColorStop(0.78, 'rgba(220, 236, 252, 0.24)');
+    rg.addColorStop(1.0, 'rgba(200, 230, 250, 0.0)');
+    aCtx.fillStyle = rg;
+    aCtx.fillRect(cxRow - halfSpan, y, halfSpan * 2, 1.5);
+  }
+  aCtx.strokeStyle = 'rgba(255, 236, 248, 0.42)';
+  aCtx.lineWidth = 1.1;
+  for (const side of [-1, 1]) {
+    aCtx.beginPath();
+    for (let y = 8; y < AH - 8; y += 3) {
+      const v = y / AH;
+      const taper = Math.sin(v * Math.PI * 0.85 + 0.18) * (1.0 - v * 0.38);
+      const px = AW * 0.5 + side * AW * (0.30 * taper + 0.03) + Math.sin(y * 0.16 + side) * 11.0;
+      if (y === 8) aCtx.moveTo(px, y); else aCtx.lineTo(px, y);
+    }
+    aCtx.stroke();
+  }
+  for (let i = 0; i < 200; i++) {
+    const v = ((i * 53) % 98) * 0.01;
+    const y = v * AH;
+    const spread = Math.sin(v * Math.PI * 0.85 + 0.18) * 0.28;
+    const x = AW * (0.5 + (((i * 29) % 200) * 0.01 - 1.0) * spread);
+    aCtx.fillStyle = i % 2 === 0 ? 'rgba(255, 244, 252, 0.52)' : 'rgba(224, 178, 216, 0.42)';
+    aCtx.beginPath();
+    aCtx.arc(x, y, 1.0 + (i % 3) * 0.45, 0, Math.PI * 2);
+    aCtx.fill();
+  }
+
+  const bellTex = new THREE.CanvasTexture(bCvs);
+  bellTex.colorSpace = THREE.SRGBColorSpace;
+  const armTex = new THREE.CanvasTexture(aCvs);
+  armTex.colorSpace = THREE.SRGBColorSpace;
+  return { bellTex, armTex };
+}
+
+function createMoonJellies() {
+  const { bellTex, armTex } = makeMoonJellyTextures();
+
+  // 内側から外側へ描画順を揃えた立体3Dメッシュ:
+  // A(口腕 part=1) -> B(立体四つ葉生殖腺 part=3) -> C(極細ショート縁辺繊毛 part=2) -> D(単層クリスタル傘 part=0)
+  const pos = [], nrm = [], uvs = [], part = [], idx = [];
+  const nv = new THREE.Vector3();
+
+  // A. 4本の柔らかなフリル口腕 (傘径内にしなやかにS字湾曲・短縮して硬い棒感を排除)
+  const segL = 18, segW = 4;
+  for (let k = 0; k < 4; k++) {
+    const a0 = k * (Math.PI / 2) + Math.PI / 4;
+    const baseV = pos.length / 3;
+    for (let il = 0; il <= segL; il++) {
+      const t = il / segL;
+      const y = 0.24 - t * 0.88;
+      const radialOut = 0.12 + Math.sin(t * Math.PI * 0.85) * 0.16;
+      const sCurveAng = a0 + Math.sin(t * 4.5 + k * 1.4) * 0.38;
+      const hw = 0.155 * Math.sin(Math.pow(t, 0.5) * Math.PI * 0.88 + 0.18) * (1.0 - 0.15 * t);
+      const twist = a0 + t * 2.8 + Math.sin(t * 7.5 + k) * 0.4;
+      const frillAmp = 0.036 * Math.sin(t * 20.0 + k * 1.6);
+      for (let iw = 0; iw <= segW; iw++) {
+        const w = (iw / segW) * 2 - 1;
+        const vFold = Math.abs(w) * 0.045;
+        const cx = Math.cos(sCurveAng) * radialOut;
+        const cz = Math.sin(sCurveAng) * radialOut;
+        const x = cx + Math.cos(twist) * w * hw + Math.sin(twist) * (vFold + frillAmp * Math.abs(w));
+        const z = cz + Math.sin(twist) * w * hw - Math.cos(twist) * (vFold + frillAmp * Math.abs(w));
+        pos.push(x, y, z);
+        nv.set(Math.sin(twist) * (w >= 0 ? 0.5 : -0.5) + Math.cos(a0) * 0.3, 0.3, -Math.cos(twist) * (w >= 0 ? 0.5 : -0.5) + Math.sin(a0) * 0.3).normalize();
+        nrm.push(nv.x, nv.y, nv.z);
+        uvs.push(iw / segW, 1.0 - t);
+        part.push(1.0, a0, t, 0.0);
+      }
+    }
+    for (let il = 0; il < segL; il++) {
+      for (let iw = 0; iw < segW; iw++) {
+        const a = baseV + il * (segW + 1) + iw;
+        const b = a + 1, c = a + (segW + 1), d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+  }
+
+  // B. 傘の内部に浮かぶ立体「四つ葉の蹄鉄形生殖腺」 (partId = 3.0)
+  const gArcSeg = 14, gTubeSeg = 8;
+  for (let k = 0; k < 4; k++) {
+    const a0 = k * (Math.PI / 2) + Math.PI / 4;
+    const gx = Math.cos(a0) * 0.28, gy = 0.32, gz = Math.sin(a0) * 0.28;
+    const lobeR = 0.135;
+    const baseV = pos.length / 3;
+    for (let ia = 0; ia <= gArcSeg; ia++) {
+      const u = ia / gArcSeg; // 0..1 along horseshoe U
+      const ang = a0 + (u * 2 - 1) * 1.28;
+      const taper = Math.sin(u * Math.PI);
+      const rTube = 0.030 * (0.35 + 0.65 * Math.pow(taper, 0.55));
+      const cx = gx + Math.cos(ang) * lobeR;
+      const cz = gz + Math.sin(ang) * lobeR;
+      const cy = gy - 0.04 * (1.0 - taper);
+      for (let it = 0; it <= gTubeSeg; it++) {
+        const phi = (it / gTubeSeg) * Math.PI * 2;
+        const nr = Math.cos(phi), ny = Math.sin(phi) * 0.68;
+        const x = cx + Math.cos(ang) * nr * rTube;
+        const y = cy + ny * rTube;
+        const z = cz + Math.sin(ang) * nr * rTube;
+        pos.push(x, y, z);
+        nv.set(Math.cos(ang) * nr, ny, Math.sin(ang) * nr).normalize();
+        nrm.push(nv.x, nv.y, nv.z);
+        uvs.push(u, it / gTubeSeg);
+        part.push(3.0, a0, u, taper);
+      }
+    }
+    for (let ia = 0; ia < gArcSeg; ia++) {
+      for (let it = 0; it < gTubeSeg; it++) {
+        const a = baseV + ia * (gTubeSeg + 1) + it;
+        const b = a + 1, c = a + (gTubeSeg + 1), d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+  }
+
+  // C. ミズクラゲ実物同様の短く極細・柔らかな縁辺繊毛 (partId = 2.0, 44本)
+  const nTen = 44, tenSegL = 10;
+  const scallopAt = theta => 1.0 - 0.036 * Math.pow(Math.abs(Math.sin(theta * 4.0)), 2.2);
+  for (let ti = 0; ti < nTen; ti++) {
+    const theta = (ti / nTen) * Math.PI * 2;
+    const lenScale = 0.24 + 0.26 * Math.abs(Math.sin(ti * 12.9898 + 3.1));
+    const rRim = Math.sin(Math.PI * 0.58) * scallopAt(theta) * 0.96;
+    const yRim = Math.cos(Math.PI * 0.58) * 0.62 - 0.04;
+    const baseV = pos.length / 3;
+    for (let il = 0; il <= tenSegL; il++) {
+      const lf = il / tenSegL;
+      const y = yRim - lf * lenScale;
+      const twistAng = theta + lf * 3.2;
+      const halfW = THREE.MathUtils.lerp(0.0048, 0.0009, lf);
+      const rCur = rRim * (1.0 - lf * 0.12 + 0.04 * Math.sin(lf * Math.PI));
+      const cx = Math.cos(theta) * rCur;
+      const cz = Math.sin(theta) * rCur;
+      for (let iw = 0; iw < 2; iw++) {
+        const sgn = iw === 0 ? -1 : 1;
+        pos.push(cx - Math.sin(twistAng) * halfW * sgn, y, cz + Math.cos(twistAng) * halfW * sgn);
+        nv.set(Math.cos(theta), 0.15, Math.sin(theta)).normalize();
+        nrm.push(nv.x, nv.y, nv.z);
+        uvs.push(iw, 1.0 - lf);
+        part.push(2.0, theta, lenScale, lf);
+      }
+    }
+    for (let il = 0; il < tenSegL; il++) {
+      const a = baseV + il * 2;
+      idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+
+  // D. 単層クリスタル透明スカラップ傘 (二重壁白濁を排除し、背裏は gl_FrontFacing で自然処理)
+  const segA = 64, segR = 18;
+  const baseV = pos.length / 3;
+  for (let ir = 0; ir <= segR; ir++) {
+    const s = ir / segR;
+    const phi = s * Math.PI * 0.58;
+    const scBlend = THREE.MathUtils.smoothstep(s, 0.65, 1.0);
+    for (let ia = 0; ia <= segA; ia++) {
+      const theta = (ia / segA) * Math.PI * 2;
+      const sc = 1.0 - (1.0 - scallopAt(theta)) * scBlend;
+      const rBase = Math.sin(phi) * sc;
+      const yBase = Math.cos(phi) * 0.62 - 0.04;
+      nv.set(Math.cos(theta) * Math.sin(phi) * 0.62, Math.cos(phi), Math.sin(theta) * Math.sin(phi) * 0.62).normalize();
+      pos.push(Math.cos(theta) * rBase, yBase, Math.sin(theta) * rBase);
+      nrm.push(nv.x, nv.y, nv.z);
+      uvs.push(0.5 + Math.cos(theta) * rBase * 0.48, 0.5 + Math.sin(theta) * rBase * 0.48);
+      part.push(0.0, theta, s, 1.0);
+    }
+  }
+  for (let ir = 0; ir < segR; ir++) {
+    for (let ia = 0; ia < segA; ia++) {
+      const a = baseV + ir * (segA + 1) + ia;
+      const b = a + 1, c = a + (segA + 1), d = c + 1;
+      idx.push(a, b, c, b, d, c);
+    }
+  }
+
+  const jellyGeo = new THREE.BufferGeometry();
+  jellyGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  jellyGeo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  jellyGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  jellyGeo.setAttribute('aPart', new THREE.Float32BufferAttribute(part, 4));
+  jellyGeo.setIndex(idx);
+
+  const jellies = [];
+  for (let i = 0; i < 12; i++) {
+    const phase = R(0, 6.28);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+      side: THREE.DoubleSide,
+      fog: true,
+      uniforms: {
+        ...fogU(),
+        uTime: T,
+        uPhase: { value: phase },
+        uSun: { value: SUN_DIR },
+        uSurf: { value: SURF },
+        uBellMap: { value: bellTex },
+        uArmMap: { value: armTex },
+      },
+      vertexShader: `attribute vec4 aPart;
+        uniform float uTime, uPhase;
+        varying vec2 vUv; varying vec3 vN; varying vec3 vWorld; varying vec4 vPart;
+        #include <fog_pars_vertex>
+        void main(){
+          vUv = uv; vPart = aPart;
+          vec3 p = position;
+          vec3 n = normal;
+          float cycle = uTime * 1.48 + uPhase;
+          float cAsym = cycle - 0.36 * sin(cycle);
+          float powerWave = pow(0.5 + 0.5 * sin(cAsym), 2.2);
+
+          if (aPart.x < 0.5) {
+            float s = aPart.z;
+            float bellWave = pow(0.5 + 0.5 * sin(cAsym - s * 1.15), 2.0);
+            float flex = smoothstep(0.08, 1.0, s);
+            float rScale = 1.0 - 0.24 * bellWave * flex;
+            float yScale = 0.86 + 0.16 * bellWave;
+            p.xz *= rScale;
+            p.y = p.y * yScale - 0.18 * bellWave * flex;
+            n = normalize(vec3(n.x / max(0.76, rScale), n.y / yScale, n.z / max(0.76, rScale)));
+          } else if (aPart.x < 1.5) {
+            float t = aPart.z;
+            float ang = aPart.y;
+            float lag = cycle - 0.45 - t * 3.6;
+            p.y -= 0.10 * powerWave;
+            p.xz *= 1.0 - 0.12 * powerWave * (1.0 - t * 0.4);
+            p.x += sin(lag + ang * 2.0) * 0.16 * pow(t, 1.3);
+            p.z += cos(lag * 0.85 + ang * 1.7) * 0.16 * pow(t, 1.3);
+          } else if (aPart.x < 2.5) {
+            float lf = aPart.w;
+            float ang = aPart.y;
+            float rimWave = pow(0.5 + 0.5 * sin(cAsym - 1.15), 2.0);
+            p.xz *= 1.0 - 0.24 * rimWave * (1.0 - 0.25 * lf);
+            p.y = p.y * (0.86 + 0.16 * rimWave) - 0.18 * rimWave;
+            p.x += sin(cycle * 0.95 - lf * 4.4 + ang * 2.0) * 0.14 * pow(lf, 1.35);
+            p.z += cos(cycle * 0.82 - lf * 3.9 + ang * 1.5) * 0.14 * pow(lf, 1.35);
+          } else {
+            // 四つ葉生殖腺は傘と一体でわずかに上下呼吸
+            float gWave = pow(0.5 + 0.5 * sin(cAsym - 0.35), 2.0);
+            p.xz *= 1.0 - 0.08 * gWave;
+            p.y = p.y * (0.88 + 0.14 * gWave) - 0.05 * gWave;
+          }
+
+          vec4 wp = modelMatrix * vec4(p, 1.0);
+          vWorld = wp.xyz;
+          vN = normalize(mat3(modelMatrix) * n);
+          vec4 mvPosition = viewMatrix * wp;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `uniform sampler2D uBellMap, uArmMap;
+        uniform float uTime, uSurf; uniform vec3 uSun;
+        varying vec2 vUv; varying vec3 vN; varying vec3 vWorld; varying vec4 vPart;
+        #include <fog_pars_fragment>
+        ${CAUSTIC_GLSL}
+        ${ABSORB_GLSL}
+        void main(){
+          vec3 n = normalize(vN);
+          bool front = gl_FrontFacing;
+          vec3 V = normalize(cameraPosition - vWorld);
+          if (dot(n, V) < 0.0) n = -n;
+          float depthFac = exp(-max(uSurf - vWorld.y, 0.0) * 0.030);
+          float ndv = max(dot(n, V), 0.0);
+          float fres = pow(1.0 - ndv, 3.8);
+          float rimSharp = pow(1.0 - ndv, 5.4);
+          float diff = 0.45 + 0.55 * clamp(dot(n, uSun), 0.0, 1.0);
+          float backLight = pow(clamp(dot(-V, uSun), 0.0, 1.0), 2.6);
+          vec3 H = normalize(uSun + V);
+          float ndh = max(dot(n, H), 0.0);
+
+          vec3 col = vec3(0.0);
+          float alpha = 0.0;
+
+          if (vPart.x < 0.5) {
+            vec4 bTex = texture2D(uBellMap, vUv);
+            float sideMask = front ? 1.0 : 0.35;
+            vec3 glassTint = vec3(0.14, 0.46, 0.68);
+            vec3 sheen = mix(vec3(0.42, 0.84, 1.0), vec3(0.94, 0.72, 0.98), fres * 0.65 + 0.35 * sin(vPart.y * 2.0 + uTime * 0.5));
+            vec3 ca = causticRGB(vWorld.xz * 0.08, uTime * 0.55);
+            vec3 canalCol = bTex.rgb * (0.50 + 0.50 * diff);
+            col = mix(glassTint, canalCol, clamp(bTex.a * 1.4, 0.0, 1.0)) * depthFac
+                + sheen * (fres * 0.38 + rimSharp * 0.60 + backLight * 0.14) * sideMask * depthFac
+                + vec3(0.32, 0.78, 0.94) * ca * (0.12 + 0.35 * rimSharp) * depthFac;
+            if (front) col += vec3(0.90, 0.98, 1.0) * (pow(ndh, 150.0) * 0.92 + pow(ndh, 24.0) * 0.06) * depthFac;
+            // 中心部は極薄クリスタル透明を保ち、内側の立体四つ葉生殖腺・放射管・縁辺フレネルが浮き上がる
+            alpha = clamp((0.015 + rimSharp * 0.52 + fres * 0.14 + bTex.a * 0.48) * sideMask, 0.0, 0.66);
+          } else if (vPart.x < 1.5) {
+            vec4 aTex = texture2D(uArmMap, vUv);
+            float tipFade = smoothstep(1.0, 0.48, vPart.z);
+            vec3 armTint = mix(vec3(0.56, 0.78, 0.94), aTex.rgb * vec3(1.12, 0.96, 1.08), 0.88);
+            col = armTint * (0.48 + 0.52 * diff) * depthFac
+                + vec3(0.90, 0.82, 0.98) * (fres * 0.28 + backLight * 0.44) * depthFac;
+            alpha = clamp(aTex.a * 0.82 * tipFade, 0.0, 0.76);
+          } else if (vPart.x < 2.5) {
+            float acrossFade = sin(clamp(vUv.x, 0.0, 1.0) * 3.14159);
+            float tipFade = smoothstep(1.0, 0.06, vPart.w);
+            col = mix(vec3(0.52, 0.86, 0.98), vec3(0.94, 0.80, 0.98), tipFade * 0.45) * (0.50 + 0.50 * depthFac);
+            alpha = clamp(acrossFade * tipFade * 0.36, 0.0, 0.40);
+          } else {
+            // 立体四つ葉生殖腺: 海水の赤色吸収を補う豊かなローズ・オーキッド色調＋卵粒質感
+            float gran = 0.5 + 0.5 * sin(vUv.x * 84.0) * sin(vUv.y * 28.0);
+            vec3 gonadBase = mix(vec3(0.96, 0.44, 0.76), vec3(1.00, 0.74, 0.90), gran * 0.72 + vPart.w * 0.28);
+            float centerGlow = smoothstep(0.0, 0.85, ndv);
+            col = gonadBase * (0.62 + 0.38 * diff) * depthFac + vec3(1.0, 0.78, 0.96) * backLight * 0.36 * depthFac;
+            alpha = clamp((0.54 + 0.38 * centerGlow) * smoothstep(0.0, 0.16, vPart.w), 0.0, 0.86);
+          }
+
+          if (alpha < 0.010) discard;
+          col = absorbWaterScatter(col, vWorld, cameraPosition, uSun);
+          gl_FragColor = vec4(col, alpha);
+          #include <fog_fragment>
+        }`
+    });
+    const bell = new THREE.Mesh(jellyGeo, mat);
+    const s = R(0.36, 0.64);
+    bell.scale.setScalar(s);
+    bell.frustumCulled = false;
+    scene.add(bell);
+    const a = R(0, 6.28), r = R(5, 22);
+    const basePos = i === 0
+      ? new THREE.Vector3(-11.8, 8.2, -7.8)
+      : (i === 1 ? new THREE.Vector3(-5.2, 7.6, -4.5) : new THREE.Vector3(Math.cos(a) * r, R(6.4, 13.5), Math.sin(a) * r));
+    jellies.push({
+      bell, s, phase,
+      base: basePos,
+    });
+  }
+
+  return {
+    update(t) {
+      for (const j of jellies) {
+        const { bell, s, phase, base } = j;
+        const driftX = Math.sin(t * 0.05 + phase) * 3.6;
+        const driftY = Math.sin(t * 0.08 + phase) * 1.8 + Math.sin(t * 1.48 + phase - 1.3) * 0.16 * s;
+        const driftZ = Math.cos(t * 0.04 + phase) * 3.6;
+        bell.position.set(base.x + driftX, base.y + driftY, base.z + driftZ);
+        bell.rotation.set(Math.sin(t * 0.28 + phase) * 0.14, t * 0.06, Math.cos(t * 0.25 + phase) * 0.14);
+      }
+    },
+    jellies,
+  };
+}
+
+// ---------------------------------------------------------------- custom 3D benthic & reef ecology
+function prepColorPart(rawGeo, hex) {
+  const g = rawGeo.index ? rawGeo.toNonIndexed() : rawGeo;
+  if (g.hasAttribute('uv')) g.deleteAttribute('uv');
+  const cnt = g.attributes.position.count;
+  const col = new THREE.Color(hex);
+  const arr = new Float32Array(cnt * 3);
+  for (let i = 0; i < cnt; i++) {
+    arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return g;
+}
+
+function sampleRockSurface(cx, cz, radius, minHeightAboveFloor, minNormalY, rayHeight, surfaceAt, fallbackRocks, outPos, outNrm) {
+  for (let t = 0; t < 160; t++) {
+    const a = R(0, 6.28), r = Math.sqrt(rand()) * radius;
+    const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+    if (rayHeight(x, z) - floorH(x, z) > minHeightAboveFloor) {
+      surfaceAt(x, z, outPos, outNrm);
+      if (outNrm.y >= minNormalY) return true;
+    }
+  }
+  if (fallbackRocks && fallbackRocks.length) {
+    const rk = fallbackRocks[Math.floor(rand() * fallbackRocks.length)];
+    const x = rk.x + R(-0.38, 0.38) * rk.sx, z = rk.z + R(-0.38, 0.38) * rk.sz;
+    surfaceAt(x, z, outPos, outNrm);
+    return true;
+  }
+  surfaceAt(cx, cz, outPos, outNrm);
+  return false;
+}
+
+// ウミトサカ・ソフトコーラル群落 (512x512透過ポリプテクスチャ + 湾曲3Dクロスカード + SSS透過発光)
+function makeSoftCoralTex() {
+  const S = 512;
+  const cvs = document.createElement('canvas');
+  cvs.width = S; cvs.height = S;
+  const ctx = cvs.getContext('2d');
+
+  // 1. 付着基部と半透明の幹・枝 (骨片入り)
+  const drawBranch = (x0, y0, x1, y1, w0, w1) => {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232, 222, 218, 0.92)';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = (w0 + w1) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo((x0 + x1) * 0.5 + (x1 - x0) * 0.1, (y0 + y1) * 0.5, x1, y1);
+    ctx.stroke();
+    // 内部の白い針状骨片ディテール
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.lineWidth = 1.3;
+    for (let k = 0; k < 14; k++) {
+      const f = k / 14;
+      const bx = x0 + (x1 - x0) * f + (Math.sin(k * 7.3) * w0 * 0.25);
+      const by = y0 + (y1 - y0) * f;
+      ctx.beginPath();
+      ctx.moveTo(bx - 2, by - 4);
+      ctx.lineTo(bx + 2, by + 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  drawBranch(256, 502, 256, 330, 38, 22);
+  const branches = [
+    [256, 360, 128, 235, 20, 10],
+    [256, 350, 382, 240, 20, 10],
+    [256, 330, 210, 170, 18, 9],
+    [256, 330, 308, 176, 18, 9],
+    [180, 285, 86, 175, 13, 6],
+    [332, 285, 424, 178, 13, 6],
+    [256, 250, 256, 106, 15, 7],
+  ];
+  branches.forEach(b => drawBranch(...b));
+
+  // 2. 枝先に密集する8本触手ポリプの花房
+  const drawPolyp = (cx, cy, rad, rot, alpha) => {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    // ポリプ萼部（やや濃い中心）
+    const cg = ctx.createRadialGradient(0, 0, rad * 0.1, 0, 0, rad * 0.85);
+    cg.addColorStop(0, `rgba(255, 255, 255, ${alpha})`);
+    cg.addColorStop(0.6, `rgba(252, 236, 232, ${alpha * 0.88})`);
+    cg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(0, 0, rad * 0.85, 0, Math.PI * 2); ctx.fill();
+
+    // 8本の繊細な放射状触手
+    ctx.strokeStyle = `rgba(255, 248, 246, ${alpha * 0.92})`;
+    ctx.lineWidth = Math.max(1.1, rad * 0.16);
+    ctx.lineCap = 'round';
+    for (let t = 0; t < 8; t++) {
+      const a = (t / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * rad * 0.25, Math.sin(a) * rad * 0.25);
+      ctx.quadraticCurveTo(
+        Math.cos(a + 0.18) * rad * 0.72, Math.sin(a + 0.18) * rad * 0.72,
+        Math.cos(a) * rad * 1.15, Math.sin(a) * rad * 1.15
+      );
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  const clusters = [
+    [128, 225, 52], [382, 230, 52], [206, 162, 54], [310, 168, 54],
+    [88, 172, 42], [422, 175, 42], [256, 108, 60], [164, 198, 44], [348, 200, 44]
+  ];
+  let seed = 1337;
+  const sr = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+  for (const [cx, cy, spread] of clusters) {
+    for (let i = 0; i < 34; i++) {
+      const a = sr() * Math.PI * 2;
+      const r = Math.sqrt(sr()) * spread;
+      drawPolyp(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.88, 7 + sr() * 7.5, sr() * 6.28, 0.72 + sr() * 0.25);
+    }
+  }
+
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return tex;
+}
+
+function createSoftCorals(rayHeight, surfaceAt, reefRocks) {
+  const coralTex = makeSoftCoralTex();
+  const cardParts = [];
+  for (let c = 0; c < 3; c++) {
+    const p = new THREE.PlaneGeometry(0.62, 0.68, 4, 8);
+    p.translate(0, 0.34, 0);
+    const posAttr = p.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const x = posAttr.getX(i), y = posAttr.getY(i);
+      const h = y / 0.68;
+      // 葉冠のように上部がわずかに外に反る湾曲
+      posAttr.setZ(i, (x * x * 1.1 + h * h * 0.06) * (c === 1 ? -1 : 1));
+    }
+    p.rotateY((c * Math.PI) / 3);
+    p.computeVertexNormals();
+    cardParts.push(p);
+  }
+  const geo = mergeGeometries(cardParts);
+
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    fog: true,
+    uniforms: {
+      ...fogU(), uTime: T, uMap: { value: coralTex }, uSun: { value: SUN_DIR }, uSurf: { value: SURF },
+    },
+    vertexShader: `attribute float aPhase; attribute vec3 aCoralCol;
+      uniform float uTime;
+      varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec3 vCoralCol;
+      #include <fog_pars_vertex>
+      void main(){
+        vUv = uv; vCoralCol = aCoralCol;
+        vec3 p = position;
+        float h = max(uv.y, 0.0);
+        float sway = h * h;
+        p.x += sin(uTime * 0.95 + aPhase + h * 2.4) * 0.065 * sway;
+        p.z += cos(uTime * 0.78 + aPhase * 1.4 + h * 2.0) * 0.048 * sway;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        vWorld = wp.xyz;
+        vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D uMap; uniform float uTime, uSurf; uniform vec3 uSun;
+      varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec3 vCoralCol;
+      #include <fog_pars_fragment>
+      ${CAUSTIC_GLSL}
+      ${ABSORB_GLSL}
+      void main(){
+        vec4 texel = texture2D(uMap, vUv);
+        if (texel.a < 0.36) discard;
+        vec3 n = normalize(vN);
+        if (!gl_FrontFacing) n = -n;
+        vec3 V = normalize(cameraPosition - vWorld);
+        float diff = clamp(dot(n, uSun), 0.0, 1.0);
+        float skyWrap = 0.5 + 0.5 * n.y;
+        float depthFac = exp(-max(uSurf - vWorld.y, 0.0) * 0.036);
+        // 根元・幹は半透明の淡乳白骨片、枝先のポリプ花房は鮮やかな個体色
+        vec3 baseTint = mix(vec3(0.88, 0.82, 0.80), vCoralCol, smoothstep(0.28, 0.54, vUv.y));
+        vec3 col = texel.rgb * baseTint;
+        vec3 lit = col * (vec3(0.28, 0.45, 0.55) * skyWrap + vec3(0.84, 0.96, 1.0) * diff * 0.85 * depthFac);
+        // 逆光時のポリプ透過発光 (Subsurface Scattering)
+        float backLight = pow(clamp(dot(-V, uSun), 0.0, 1.0), 2.4);
+        float rim = pow(1.0 - max(dot(n, V), 0.0), 2.2);
+        lit += vCoralCol * (backLight * 0.55 + rim * 0.28 + 0.14) * smoothstep(0.32, 0.85, vUv.y) * depthFac;
+        vec3 ca = causticRGB(vWorld.xz * 0.065, uTime * 0.48);
+        lit += col * ca * 0.32 * depthFac;
+        lit = absorbWaterScatter(lit, vWorld, cameraPosition, uSun);
+        gl_FragColor = vec4(lit, 1.0);
+        #include <fog_fragment>
+      }`
+  });
+
+  const N = 65;
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  const ph = new Float32Array(N);
+  const cols = new Float32Array(N * 3);
+  const d = new THREE.Object3D();
+  const pos = new THREE.Vector3(), nrm = new THREE.Vector3(), iq = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const palette = [0xff6b45, 0xff7e9d, 0xf5a23b, 0xee4c58, 0xf7996e];
+  const cTmp = new THREE.Color();
+  const accum = new THREE.Vector3();
+  for (let i = 0; i < N; i++) {
+    sampleRockSurface(15, -4, 9.2, 0.25, 0.22, rayHeight, surfaceAt, reefRocks, pos, nrm);
+    d.position.copy(pos).addScaledVector(nrm, -0.02);
+    iq.setFromUnitVectors(up, nrm);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.setScalar(R(0.85, 1.48));
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+    ph[i] = R(0, 6.28);
+    cTmp.setHex(palette[i % palette.length]).offsetHSL(R(-0.02, 0.02), R(-0.04, 0.04), R(-0.04, 0.04));
+    cols[i * 3] = cTmp.r; cols[i * 3 + 1] = cTmp.g; cols[i * 3 + 2] = cTmp.b;
+    if (i < 16) accum.add(d.position);
+  }
+  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1));
+  geo.setAttribute('aCoralCol', new THREE.InstancedBufferAttribute(cols, 3));
+  scene.add(mesh);
+  return { center: accum.divideScalar(16) };
+}
+
+// サザエ & クロアワビ (筑前海の重要な磯根資源)
+function createAbaloneAndTurbanShells(rayHeight, surfaceAt, rockyPool, sazaeTex, awabiTex, profiles) {
+  const up = new THREE.Vector3(0, 1, 0);
+  // サザエ (32個 - 実写レリーフ)
+  const turbanGeo = buildReliefGeo(profiles.sazae, 0.16, 0.10, 32, 28);
+  const turbanMat = makeBenthicReliefMat(sazaeTex, 'uw_sazae', { roughness: 0.68, metalness: 0.04, isBenthic: true });
+  const NT = 32;
+  const turbans = new THREE.InstancedMesh(turbanGeo, turbanMat, NT);
+
+  // クロアワビ (24個 - 実写レリーフ)
+  const abGeo = buildReliefGeo(profiles.awabi, 0.20, 0.068, 32, 26);
+  const abMat = makeBenthicReliefMat(awabiTex, 'uw_awabi', { roughness: 0.56, metalness: 0.08, isBenthic: true });
+  const NA = 24;
+  const abalones = new THREE.InstancedMesh(abGeo, abMat, NA);
+
+  const d = new THREE.Object3D();
+  const pos = new THREE.Vector3(), nrm = new THREE.Vector3(), iq = new THREE.Quaternion();
+  const accum = new THREE.Vector3();
+  for (let i = 0; i < NT; i++) {
+    const inKelp = i < 20;
+    const cx = inKelp ? -14 : 15, cz = inKelp ? -10 : -4;
+    sampleRockSurface(cx, cz, inKelp ? 10.5 : 8.5, 0.14, 0.3, rayHeight, surfaceAt, rockyPool, pos, nrm);
+    d.position.copy(pos).addScaledVector(nrm, 0.008);
+    iq.setFromUnitVectors(up, nrm);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.setScalar(R(0.85, 1.35));
+    d.updateMatrix();
+    turbans.setMatrixAt(i, d.matrix);
+    if (i < 8) accum.add(d.position);
+  }
+  for (let i = 0; i < NA; i++) {
+    const inKelp = i < 16;
+    const cx = inKelp ? -14 : 15, cz = inKelp ? -10 : -4;
+    sampleRockSurface(cx, cz, inKelp ? 10.0 : 8.0, 0.14, 0.25, rayHeight, surfaceAt, rockyPool, pos, nrm);
+    d.position.copy(pos).addScaledVector(nrm, 0.006);
+    iq.setFromUnitVectors(up, nrm);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.setScalar(R(0.9, 1.4));
+    d.updateMatrix();
+    abalones.setMatrixAt(i, d.matrix);
+  }
+  scene.add(turbans, abalones);
+  return { center: accum.divideScalar(8) };
+}
+
+// アオリイカの卵塊 (藻場のホンダワラ根元付近の産卵床)
+function createSquidEggs(surfaceAt) {
+  const parts = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  const q = new THREE.Quaternion();
+  const dir = new THREE.Vector3();
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2 + R(-0.15, 0.15);
+    const tilt = R(0.28, 0.72);
+    dir.set(Math.sin(tilt) * Math.cos(a), Math.cos(tilt), Math.sin(tilt) * Math.sin(a)).normalize();
+    const len = R(0.11, 0.16);
+    const pod = new THREE.CapsuleGeometry(0.014, len, 4, 7);
+    pod.translate(0, len * 0.5 + 0.02, 0);
+    q.setFromUnitVectors(up, dir);
+    pod.applyQuaternion(q);
+    parts.push(pod.toNonIndexed());
+  }
+  const geo = mergeGeometries(parts);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, fog: true,
+    uniforms: { ...fogU(), uTime: T, uSun: { value: SUN_DIR } },
+    vertexShader: `uniform float uTime; varying vec3 vN, vWorld;
+      #include <fog_pars_vertex>
+      void main(){
+        vec3 p = position;
+        float h = max(p.y, 0.0);
+        p.x += sin(uTime * 1.1 + h * 5.0) * 0.028 * h;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(p, 1.0);
+        vWorld = wp.xyz;
+        vN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform vec3 uSun; varying vec3 vN, vWorld;
+      #include <fog_pars_fragment>
+      ${ABSORB_GLSL}
+      void main(){
+        vec3 n = normalize(vN);
+        vec3 V = normalize(cameraPosition - vWorld);
+        float rim = pow(1.0 - abs(dot(n, V)), 1.6);
+        float diff = 0.5 + 0.5 * clamp(dot(n, uSun), 0.0, 1.0);
+        vec3 col = vec3(0.86, 0.92, 0.94) * diff + vec3(0.22, 0.36, 0.42) * rim;
+        col = absorbWater(col, length(cameraPosition - vWorld));
+        gl_FragColor = vec4(col, mix(0.72, 0.92, rim));
+        #include <fog_fragment>
+      }`
+  });
+  const N = 12;
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  const d = new THREE.Object3D();
+  const pos = new THREE.Vector3(), nrm = new THREE.Vector3();
+  const clusters = [
+    [-12.2, -8.5], [-14.8, -11.2], [-11.5, -12.4], [-15.8, -7.8], [-10.0, -7.0]
+  ];
+  for (let i = 0; i < N; i++) {
+    const base = clusters[i % clusters.length];
+    const x = base[0] + R(-0.65, 0.65), z = base[1] + R(-0.65, 0.65);
+    surfaceAt(x, z, pos, nrm);
+    d.position.set(x, pos.y + 0.04, z);
+    d.rotation.set(R(-0.15, 0.15), R(0, 6.28), R(-0.15, 0.15));
+    d.scale.setScalar(R(0.95, 1.3));
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+  }
+  scene.add(mesh);
+}
+
+// 食害されたアラメ・クロメの残株 (磯焼け域で葉部を食べ尽くされた海藻の茎・付着器)
+function createGrazedStipes(rayHeight, surfaceAt, isoyakeRocks, arameTex) {
+  // 1. 岩肌を掴む曲った仮根(ホールドファスト)＋食害で千切れた茎軸
+  const parts = [];
+  const up = new THREE.Vector3(0, 1, 0);
+  const stipe = new THREE.CylinderGeometry(0.007, 0.015, 0.12, 7, 4);
+  stipe.translate(0, 0.06, 0);
+  const spPos = stipe.attributes.position;
+  for (let i = 0; i < spPos.count; i++) {
+    const y = spPos.getY(i);
+    spPos.setX(i, spPos.getX(i) + Math.pow(y / 0.12, 1.5) * 0.028);
+  }
+  stipe.computeVertexNormals();
+  parts.push(prepColorPart(stipe, 0x3b2f1c));
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2 + R(-0.15, 0.15);
+    const hapt = new THREE.ConeGeometry(0.009, 0.072, 5);
+    hapt.rotateZ(1.18);
+    hapt.rotateY(a);
+    hapt.translate(Math.cos(a) * 0.022, 0.012, Math.sin(a) * 0.022);
+    parts.push(prepColorPart(hapt, 0x2c2214));
+  }
+  const stipeGeo = mergeGeometries(parts);
+  const stipeMat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.85, metalness: 0.0,
+  });
+  patchUnderwaterStandardMat(stipeMat, { key: 'uw_grazed', isBenthic: true, swayAmp: 0.05 });
+
+  // 2. 実写アラメ葉面の先端食み千切り片 (曲面リボン + アルファ切り抜き + 半透明揺動)
+  const leafParts = [];
+  for (let f = 0; f < 3; f++) {
+    const frond = new THREE.PlaneGeometry(0.085, 0.095, 3, 4);
+    frond.translate(0, 0.047, 0);
+    const fp = frond.attributes.position, fuv = frond.attributes.uv;
+    for (let i = 0; i < fp.count; i++) {
+      const u = fuv.getX(i), v = fuv.getY(i);
+      fp.setZ(i, Math.sin(v * 3.1 + u * 2.4) * 0.014 - Math.pow(v, 1.4) * 0.022);
+      // 食み千切られたアラメ先端裂片の自然な波形葉片をマップ
+      fuv.setXY(i, 0.16 + u * 0.30 + f * 0.08, 0.64 + v * 0.32);
+    }
+    frond.rotateZ(0.32 - f * 0.18);
+    frond.rotateY(f * 2.1);
+    frond.translate(0.025, 0.105, 0);
+    frond.computeVertexNormals();
+    leafParts.push(frond.toNonIndexed());
+  }
+  const leafGeo = mergeGeometries(leafParts);
+  const leafMat = new THREE.MeshStandardMaterial({
+    map: arameTex, color: 0xd0d8b8, alphaTest: 0.32, side: THREE.DoubleSide, roughness: 0.60, metalness: 0.02,
+  });
+  patchUnderwaterStandardMat(leafMat, { key: 'uw_grazed_leaf', isBenthic: false, swayAmp: 0.06 });
+
+  const N = 32;
+  const stipeMesh = new THREE.InstancedMesh(stipeGeo, stipeMat, N);
+  const leafMesh = new THREE.InstancedMesh(leafGeo, leafMat, N);
+  const d = new THREE.Object3D();
+  const pos = new THREE.Vector3(), nrm = new THREE.Vector3(), iq = new THREE.Quaternion(), worldUpQ = new THREE.Quaternion();
+  for (let i = 0; i < N; i++) {
+    sampleRockSurface(-2, 18, 10.0, 0.15, 0.55, rayHeight, surfaceAt, isoyakeRocks, pos, nrm);
+    d.position.copy(pos).addScaledVector(nrm, -0.006);
+    iq.setFromUnitVectors(up, nrm);
+    iq.slerp(worldUpQ, 0.55);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.set(R(0.85, 1.25), R(0.75, 1.25), R(0.85, 1.25));
+    d.updateMatrix();
+    stipeMesh.setMatrixAt(i, d.matrix);
+    leafMesh.setMatrixAt(i, d.matrix);
+  }
+  scene.add(stipeMesh, leafMesh);
+}
+
+// マナマコ (砂地と岩礁の境界周辺に生息する底生生物)
+function createSeaCucumbers(rayHeight, surfaceAt, manamakoTex, profile) {
+  const geo = buildReliefGeo(profile, 0.28, 0.068, 34, 18);
+  const mat = makeBenthicReliefMat(manamakoTex, 'uw_cucum_tex', { roughness: 0.64, metalness: 0.02, isBenthic: true });
+
+  const N = 22;
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  const d = new THREE.Object3D();
+  const pos = new THREE.Vector3(), nrm = new THREE.Vector3(), iq = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const accum = new THREE.Vector3();
+  const zones = [[-2, 14.5], [-10, -5], [9, -2]];
+  for (let i = 0; i < N; i++) {
+    const zc = zones[i % zones.length];
+    let x = zc[0], z = zc[1];
+    for (let t = 0; t < 40; t++) {
+      const a = R(0, 6.28), r = R(1.5, 6.5);
+      const tx = zc[0] + Math.cos(a) * r, tz = zc[1] + Math.sin(a) * r;
+      if (rayHeight(tx, tz) - floorH(tx, tz) <= 0.25) { x = tx; z = tz; break; }
+    }
+    surfaceAt(x, z, pos, nrm);
+    d.position.copy(pos).addScaledVector(nrm, 0.006);
+    iq.setFromUnitVectors(up, nrm);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.setScalar(R(0.85, 1.35));
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+    if (i < 6) accum.add(d.position);
+  }
+  scene.add(mesh);
+  return { center: accum.divideScalar(6) };
+}
+
+// アオウミウシ (志賀島・恋の浦など玄界灘岩礁帯の人気マクロ生物)
+function createNudibranchs(rayHeight, surfaceAt, allRocks, aoumiushiTex, profile) {
+  const geo = buildReliefGeo(profile, 0.14, 0.048, 30, 16);
+  const mat = makeBenthicReliefMat(aoumiushiTex, 'uw_nudi_tex', { roughness: 0.30, metalness: 0.02, isBenthic: false });
+
+  const N = 14;
+  const mesh = new THREE.InstancedMesh(geo, mat, N);
+  const d = new THREE.Object3D();
+  const pos = new THREE.Vector3(), nrm = new THREE.Vector3(), iq = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  const centers = [[15, -4], [-14, -10], [-2, 18]];
+  for (let i = 0; i < N; i++) {
+    const zc = centers[i % centers.length];
+    sampleRockSurface(zc[0], zc[1], 8.5, 0.16, 0.35, rayHeight, surfaceAt, allRocks, pos, nrm);
+    d.position.copy(pos).addScaledVector(nrm, 0.006);
+    iq.setFromUnitVectors(up, nrm);
+    d.quaternion.copy(iq);
+    d.rotateY(R(0, 6.28));
+    d.scale.setScalar(R(0.95, 1.38));
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+  }
+  scene.add(mesh);
+}
+
+// ---------------------------------------------------------------- bubbles & marine snow
+const pointUniforms = { uScale: { value: 1 } };
+function updatePointScale() {
+  pointUniforms.uScale.value = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+}
+{
+  // 3D屈折・全反射（スネルの臨界角 TIR + 扁平流体振動）を備えたリアル空気泡
+  const vents = [
+    [-12.5, floorH(-12.5, -8.5), -8.5],
+    [-16.0, floorH(-16.0, -12.0), -12.0],
+    [-8.5, floorH(-8.5, -6.0), -6.0],
+    [13.5, floorH(13.5, -3.5), -3.5],
+    [10.2, floorH(10.2, -5.0), -5.0],
+    [-2.5, floorH(-2.5, 16.5), 16.5],
+    [4.5, floorH(4.5, 4.0), 4.0],
+  ];
+  const N = 560;
+  const bubbleGeo = new THREE.IcosahedronGeometry(1, 2);
+  const origins = new Float32Array(N * 3);
+  const data = new Float32Array(N * 4); // seed, radius, plumeSpread, mode(0=plume, 1=upperWave)
+  const dm = new THREE.Matrix4();
+  const inst = new THREE.InstancedMesh(bubbleGeo, new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+    fog: true,
+    uniforms: { ...fogU(), uTime: T, uSun: { value: SUN_DIR }, uSurf: { value: SURF } },
+    vertexShader: `attribute vec3 aOrigin; attribute vec4 aData;
+      uniform float uTime, uSurf;
+      varying vec3 vN; varying vec3 vWorld; varying float vFade; varying float vRad;
+      #include <fog_pars_vertex>
+      void main(){
+        float seed = aData.x;
+        float rad = aData.y;
+        float spread = aData.z;
+        float isWave = aData.w;
+        vRad = rad;
+
+        // 浮力＋表面張力に応じたサイズ別上昇速度・扁平化・非定常揺動
+        float oblate = mix(0.96, 0.64, smoothstep(0.012, 0.052, rad));
+        float wobAmt = 0.14 * smoothstep(0.014, 0.050, rad);
+        vec3 p = position;
+        p.y *= oblate;
+        p.y -= 0.14 * (1.0 - oblate) * smoothstep(0.0, -0.85, position.y);
+        float w1 = sin(uTime * 11.2 + seed * 83.0 + position.y * 3.4);
+        float w2 = cos(uTime * 9.6 + seed * 67.0 - position.y * 3.1);
+        p.x *= 1.0 + w1 * wobAmt;
+        p.z *= 1.0 + w2 * wobAmt;
+        p *= rad;
+
+        vec3 center;
+        if (isWave < 0.5) {
+          float speed = mix(0.46, 1.30, clamp(rad / 0.055, 0.0, 1.0));
+          float rise = max(1.5, (uSurf - 0.12) - aOrigin.y);
+          float life = fract(uTime * speed / rise + seed * 7.13);
+          float swirlAng = life * 10.5 + seed * 36.0;
+          // 大きな扁平バブルと後続の小さな気泡ウェイクが自然な上昇渦列をつくる
+          float cone = 0.04 + pow(life, 0.9) * spread;
+          float driftX = sin(uTime * 0.42 + life * 4.0 + seed * 19.0) * (0.10 + life * 0.32) + life * 0.45;
+          float driftZ = cos(uTime * 0.36 + life * 3.5 + seed * 29.0) * (0.10 + life * 0.32);
+          center = vec3(
+            aOrigin.x + cos(swirlAng) * cone + driftX,
+            aOrigin.y + life * rise,
+            aOrigin.z + sin(swirlAng) * cone + driftZ
+          );
+          vFade = smoothstep(0.0, 0.04, life) * smoothstep(1.0, 0.92, life);
+        } else {
+          // 波浪・光合成により上中層を漂うマイクロバブル群
+          float tPhase = uTime * 0.22 + seed * 31.4;
+          vec3 drift = vec3(
+            sin(tPhase + aOrigin.z * 0.3) * 0.9 + uTime * 0.18,
+            sin(tPhase * 1.4 + seed * 9.0) * 0.65,
+            cos(tPhase * 0.85 + aOrigin.x * 0.3) * 0.9
+          );
+          vec3 rel = mod(aOrigin + drift - cameraPosition + vec3(18.0, 9.0, 18.0), vec3(36.0, 18.0, 36.0)) - vec3(18.0, 9.0, 18.0);
+          center = cameraPosition + rel;
+          center.y = min(center.y, uSurf - 0.15);
+          vFade = smoothstep(17.5, 6.0, length(rel)) * smoothstep(uSurf - 16.0, uSurf - 3.0, center.y);
+        }
+
+        vec4 wp = vec4(center + p, 1.0);
+        vWorld = wp.xyz;
+        vN = normalize(vec3(normal.x / (1.0 + wobAmt * 0.35), normal.y / oblate, normal.z / (1.0 + wobAmt * 0.35)));
+        vec4 mvPosition = viewMatrix * wp;
+        vFade *= smoothstep(0.35, 1.1, -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform vec3 uSun; uniform float uSurf;
+      varying vec3 vN; varying vec3 vWorld; varying float vFade; varying float vRad;
+      #include <fog_pars_fragment>
+      ${ABSORB_GLSL}
+      void main(){
+        vec3 n = normalize(vN);
+        vec3 V = normalize(cameraPosition - vWorld);
+        float ndv = clamp(dot(n, V), 0.0, 1.0);
+        // 水中空気泡の光学: 臨界角48.6° (dot < 0.661) で銀色の全反射(TIR)、中心は深い紺色の屈折抜け
+        float tir = smoothstep(0.68, 0.30, ndv);
+        float rimEdge = pow(1.0 - ndv, 3.6);
+        vec3 R = reflect(-V, n);
+        float skyWin = smoothstep(-0.18, 0.78, R.y);
+        vec3 tirCol = mix(vec3(0.08, 0.36, 0.54), vec3(0.76, 0.94, 0.99), skyWin);
+        vec3 refrCore = mix(vec3(0.015, 0.10, 0.19), vec3(0.14, 0.44, 0.58), smoothstep(0.05, 0.92, n.y));
+        float depthFac = exp(-max(uSurf - vWorld.y, 0.0) * 0.032);
+        vec3 H = normalize(uSun + V);
+        float glint = pow(max(dot(n, H), 0.0), 170.0) * 2.4 * depthFac;
+        float topCrescent = pow(max(dot(R, vec3(0.0, 1.0, 0.0)), 0.0), 8.0) * 0.55 * depthFac;
+
+        vec3 col = mix(refrCore, tirCol, tir) + vec3(0.92, 0.99, 1.0) * (glint + topCrescent);
+        float alpha = clamp((0.18 + tir * 0.70 + rimEdge * 0.25 + clamp(glint, 0.0, 0.6)) * vFade, 0.0, 0.96);
+        if (alpha < 0.015) discard;
+        col = absorbWaterScatter(col, vWorld, cameraPosition, uSun);
+        gl_FragColor = vec4(col, alpha);
+        #include <fog_fragment>
+      }`
+  }), N);
+  inst.frustumCulled = false;
+
+  for (let i = 0; i < N; i++) {
+    dm.makeTranslation(0, 0, 0);
+    inst.setMatrixAt(i, dm);
+    const s = rand();
+    const isWave = i >= 380 ? 1.0 : 0.0;
+    const rad = isWave
+      ? R(0.010, 0.024)
+      : (s < 0.20 ? R(0.036, 0.072) : s < 0.54 ? R(0.018, 0.035) : R(0.009, 0.017));
+    if (isWave) {
+      origins.set([R(-18, 18), R(10, SURF - 0.5), R(-18, 18)], i * 3);
+      data.set([rand(), rad, 0.5, 1.0], i * 4);
+    } else {
+      const vt = vents[i % vents.length];
+      origins.set([vt[0] + R(-0.32, 0.32), vt[1] + 0.08, vt[2] + R(-0.32, 0.32)], i * 3);
+      data.set([rand(), rad, R(0.16, 0.52), 0.0], i * 4);
+    }
+  }
+  bubbleGeo.setAttribute('aOrigin', new THREE.InstancedBufferAttribute(origins, 3));
+  bubbleGeo.setAttribute('aData', new THREE.InstancedBufferAttribute(data, 4));
+  scene.add(inst);
+}
+{
+  const N = 2600;
+  const pos = new Float32Array(N * 3), seed = new Float32Array(N);
+  for (let i = 0; i < N; i++) { pos.set([R(-18, 18), R(-18, 18), R(-18, 18)], i * 3); seed[i] = rand(); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.NormalBlending,
+    uniforms: { uTime: T, uScale: pointUniforms.uScale },
+    vertexShader: `attribute float aSeed; uniform float uTime, uScale; varying float vA;
+      void main(){
+        vec3 box = vec3(36.0);
+        vec3 p = position + vec3(sin(uTime * 0.1 + aSeed * 6.0) * 0.5 + uTime * 0.09,
+                                 -uTime * (0.04 + aSeed * 0.08),
+                                 cos(uTime * 0.13 + aSeed * 5.0) * 0.5);
+        p = mod(p - cameraPosition + box * 0.5, box) - box * 0.5 + cameraPosition;
+        vec4 mv = viewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float d = max(0.01, -mv.z);
+        gl_PointSize = clamp(uScale * (0.008 + aSeed * 0.012) / d, 1.0, 5.5);
+        // レンズ直前のボケ白点化を抑えつつ遠近フェード
+        vA = smoothstep(18.0, 5.5, length(p - cameraPosition)) * smoothstep(1.2, 2.8, d) * (0.18 + aSeed * 0.34);
+      }`,
+    fragmentShader: `varying float vA;
+      void main(){
+        float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
+        gl_FragColor = vec4(vec3(0.62, 0.80, 0.86), smoothstep(0.5, 0.05, d) * vA);
+      }`
+  });
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; scene.add(pts);
+}
+
+// ---------------------------------------------------------------- build full ecosystem asynchronously
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Vector3();
+const dummy = new THREE.Object3D();
+
+class School {
+  constructor({ geo, tex, count, scale, scaleVar = 0.25, spec = 0.3, spread, path, speed = 1, wiggle = 9, amp = 0.075, lag = 1.5, wob = 0.35, stationary = false, places = null }) {
+    this.mesh = new THREE.InstancedMesh(geo, makeFishMat(tex, spec), count);
+    this.mesh.frustumCulled = false;
+    this.path = path; this.speed = speed; this.wobAmp = wob; this.stationary = stationary;
+    this.fish = [];
+    const ph = new Float32Array(count), sp = new Float32Array(count), am = new Float32Array(count), tn = new Float32Array(count);
+    const g = () => (rand() + rand() + rand() - 1.5) / 1.5;
+
+    for (let i = 0; i < count; i++) {
+      const s = scale * (1 + R(-0.5, 0.5) * scaleVar);
+      ph[i] = rand();
+      sp[i] = wiggle * R(0.85, 1.2);
+      am[i] = stationary ? 0.014 : amp * R(0.85, 1.2);
+      tn[i] = R(-1, 1);
+      if (stationary && places) {
+        const pl = places[i % places.length];
+        dummy.position.set(pl.x, pl.y, pl.z);
+        dummy.rotation.set(pl.rx || 0, pl.ry || R(0, 6.28), pl.rz || 0);
+        dummy.scale.setScalar(s);
+        dummy.updateMatrix();
+        this.mesh.setMatrixAt(i, dummy.matrix);
+        this.fish.push({ staticPos: new THREE.Vector3(pl.x, pl.y, pl.z), s });
+      } else {
+        this.fish.push({
+          off: new THREE.Vector3(g() * spread[0], g() * spread[1], g() * spread[2]),
+          lag: R(0, lag), wp: R(0, 6.28), wf: R(0.28, 0.72), s,
+          dir: new THREE.Vector3(1, 0, 0),
+        });
+      }
+    }
+    geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1));
+    geo.setAttribute('aSpeed', new THREE.InstancedBufferAttribute(sp, 1));
+    geo.setAttribute('aAmp', new THREE.InstancedBufferAttribute(am, 1));
+    geo.setAttribute('aTint', new THREE.InstancedBufferAttribute(tn, 1));
+    if (stationary) this.mesh.instanceMatrix.needsUpdate = true;
+    scene.add(this.mesh);
+  }
+  pos(f, t, out) {
+    this.path(t * this.speed - f.lag, out);
+    const br = 1 + 0.16 * Math.sin(t * 0.22 + f.wp);
+    out.addScaledVector(f.off, br);
+    out.x += Math.sin(t * f.wf + f.wp) * this.wobAmp;
+    out.y += Math.sin(t * f.wf * 1.25 + f.wp * 2) * this.wobAmp * 0.45;
+    out.z += Math.cos(t * f.wf * 0.9 + f.wp) * this.wobAmp;
+    out.y = Math.min(SURF - 1.2, Math.max(out.y, floorH(out.x, out.z) + 0.45 + f.s * 0.4));
+    return out;
+  }
+  update(t) {
+    if (this.stationary) return;
+    this.fish.forEach((f, i) => {
+      this.pos(f, t, tmpA);
+      this.pos(f, t + 0.12, tmpB);
+      tmpC.subVectors(tmpB, tmpA);
+      if (tmpC.lengthSq() > 1e-8) f.dir.lerp(tmpC.normalize(), 0.14).normalize();
+      dummy.position.copy(tmpA);
+      dummy.lookAt(tmpC.copy(tmpA).add(f.dir));
+      dummy.scale.setScalar(f.s);
+      dummy.updateMatrix();
+      this.mesh.setMatrixAt(i, dummy.matrix);
+    });
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+  anchor(out) {
+    if (this.stationary) return out.copy(this.fish[0].staticPos);
+    return this.pos(this.fish[0], T.value, out);
+  }
+}
+
+function makeSeaweedCard(tex, aspect, count, places, { sway = 0.16, warmBack = [0.22, 0.25, 0.06], tiltStrength = 0.08 }) {
+  // 4枚の湾曲・螺旋ねじれ・皺凹凸つき3D葉体クラスタ (平面クロスから立体的藻体へ)
+  const sheets = [];
+  const wCard = 1 / aspect;
+  for (let k = 0; k < 4; k++) {
+    const sh = new THREE.PlaneGeometry(wCard, 1, 6, 16);
+    sh.translate(0, 0.5, 0);
+    const p = sh.attributes.position, uv = sh.attributes.uv;
+    const tanArr = new Float32Array(p.count * 3);
+    const rotA = k * Math.PI * 0.25 + (k % 2 === 0 ? 0.14 : -0.14);
+    const cosA = Math.cos(rotA), sinA = Math.sin(rotA);
+    for (let i = 0; i < p.count; i++) {
+      const u = uv.getX(i), v = uv.getY(i);
+      const flare = THREE.MathUtils.smoothstep(v, 0.08, 0.95);
+      // 仮根(v<0.08)を一点に寄せつつ上部へ向かって碗状の反りと葉縁のうねりを形成
+      const cup = Math.cos((u - 0.5) * Math.PI) * 0.055 * flare;
+      const ripple = Math.sin(v * 14.0 + u * 6.0 + k * 1.7) * 0.022 * Math.sin(v * Math.PI);
+      const arch = flare * flare * 0.095;
+      const twist = (v - 0.12) * (k % 2 === 0 ? 0.34 : -0.30);
+      const x0 = p.getX(i) * (0.35 + 0.65 * THREE.MathUtils.smoothstep(v, 0.0, 0.24));
+      const z0 = -cup + ripple + arch;
+      const ct = Math.cos(twist), st = Math.sin(twist);
+      const x1 = x0 * ct - z0 * st;
+      const z1 = x0 * st + z0 * ct;
+      const y1 = p.getY(i) - flare * flare * 0.024;
+      p.setXYZ(i, x1, y1, z1);
+      tanArr[i * 3] = cosA;
+      tanArr[i * 3 + 1] = 0;
+      tanArr[i * 3 + 2] = -sinA;
+    }
+    sh.rotateY(rotA);
+    sh.computeVertexNormals();
+    sh.setAttribute('aTan', new THREE.BufferAttribute(tanArr, 3));
+    sheets.push(sh);
+  }
+  const geo = mergeGeometries(sheets);
+
+  const ph = new Float32Array(count);
+  const tn = new Float32Array(count);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    fog: true,
+    alphaToCoverage: true,
+    uniforms: {
+      ...fogU(), uTime: T, uMap: { value: tex }, uSun: { value: SUN_DIR },
+      uSurf: { value: SURF }, uSway: { value: sway }, uBack: { value: new THREE.Color(...warmBack) },
+    },
+    vertexShader: `attribute float aPhase; attribute float aTint; attribute vec3 aTan;
+      uniform float uTime, uSway;
+      varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec3 vT; varying float vH; varying float vTint;
+      #include <fog_pars_vertex>
+      void main(){
+        vUv = uv; vH = uv.y; vTint = aTint;
+        vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        float height = length(instanceMatrix[1].xyz);
+        float bend = pow(clamp(uv.y, 0.0, 1.0), 1.35);
+        // 対馬暖流の空間コヒーレントなうねり波 + 個別の葉先揺動
+        float surge = sin(uTime * 0.72 - dot(wp.xz, vec2(0.18, 0.11)) + aPhase * 0.35);
+        float gust = sin(uTime * 1.38 + aPhase * 2.1 + uv.y * 3.8 + uv.x * 2.5);
+        wp.x += (surge * uSway * 0.95 + uSway * 0.38 + gust * uSway * 0.28) * bend * height;
+        wp.z += (cos(uTime * 0.56 - dot(wp.xz, vec2(0.14, 0.16)) + aPhase * 0.4) * uSway * 0.65 + gust * uSway * 0.20) * bend * height;
+        wp.y -= abs(surge) * 0.042 * bend * height;
+        vWorld = wp.xyz;
+        mat3 instN = mat3(modelMatrix) * mat3(instanceMatrix);
+        vN = normalize(instN * normal);
+        vT = normalize(instN * aTan);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `uniform sampler2D uMap; uniform float uTime, uSurf; uniform vec3 uSun, uBack;
+      varying vec2 vUv; varying vec3 vWorld; varying vec3 vN; varying vec3 vT; varying float vH; varying float vTint;
+      #include <fog_pars_fragment>
+      ${CAUSTIC_GLSL}
+      ${ABSORB_GLSL}
+      void main(){
+        vec4 texel = texture2D(uMap, vUv);
+        float alpha = smoothstep(0.14, 0.56, texel.a);
+        if (alpha < 0.09) discard;
+
+        // 葉面の皺・気胞・葉脈からの微細バンプ法線
+        float eps = 0.0020;
+        float lumC = dot(texel.rgb, vec3(0.3, 0.59, 0.11));
+        float lumX = dot(texture2D(uMap, vUv + vec2(eps, 0.0)).rgb, vec3(0.3, 0.59, 0.11));
+        float lumY = dot(texture2D(uMap, vUv + vec2(0.0, eps)).rgb, vec3(0.3, 0.59, 0.11));
+        vec3 N0 = normalize(vN);
+        if (!gl_FrontFacing) N0 = -N0;
+        vec3 T = normalize(vT - N0 * dot(N0, vT));
+        vec3 B = normalize(cross(N0, T));
+        vec3 n = normalize(N0 + T * ((lumC - lumX) * 1.45) + B * ((lumC - lumY) * 1.45));
+
+        vec3 V = normalize(cameraPosition - vWorld);
+        float depthFac = exp(-max(uSurf - vWorld.y, 0.0) * 0.032);
+        float holdAO = mix(0.62, 1.0, smoothstep(0.0, 0.14, vH));
+        vec3 col = texel.rgb * (0.94 + 0.20 * vTint) * holdAO;
+
+        // 仮根近傍のわずかな石灰・砂粒馴染み
+        float holdSed = 1.0 - smoothstep(0.0, 0.08, vH);
+        col = mix(col, vec3(0.32, 0.30, 0.26), holdSed * 0.24);
+
+        float diff = clamp(dot(n, uSun), 0.0, 1.0);
+        float wrapDiff = clamp(0.32 * dot(n, uSun) + 0.68, 0.32, 1.0);
+        float shade = mix(0.64, 1.08, smoothstep(0.0, 0.82, vH));
+        vec3 bounce = vec3(0.22, 0.40, 0.36) * max(-n.y, 0.0) * depthFac;
+        vec3 lit = col * (vec3(0.38, 0.56, 0.60) * wrapDiff + vec3(0.86, 0.98, 1.0) * diff * 0.64 + bounce) * shade * depthFac;
+
+        // 厚み(茎/主軸=暗く、葉片=クロロフィル透過) に応じた SSS 透過発光
+        float bladeThin = smoothstep(0.03, 0.24, lumC) * smoothstep(0.06, 0.55, vH);
+        float sunForward = pow(clamp(dot(-V, uSun), 0.0, 1.0), 2.1) * 0.90 + pow(clamp(dot(-n, uSun), 0.0, 1.0), 1.4) * 0.55;
+        lit += (col * 1.45 + uBack * 0.85) * (0.22 + sunForward * 0.85) * bladeThin * depthFac;
+
+        // 濡れた藻体表面の光沢 + 色収差コースティクス
+        vec3 H = normalize(uSun + V);
+        float wetSpec = pow(max(dot(n, H), 0.0), 32.0) * (0.30 + 0.42 * smoothstep(0.06, 0.36, lumC)) * (0.35 + 0.65 * vH) * depthFac;
+        lit += vec3(0.58, 0.82, 0.54) * wetSpec;
+        vec3 ca = causticRGB(vWorld.xz * 0.065, uTime * 0.50);
+        lit += col * ca * (0.32 + 0.48 * max(n.y, 0.0)) * (0.3 + 0.7 * vH) * depthFac;
+
+        lit = absorbWaterScatter(lit, vWorld, cameraPosition, uSun);
+        gl_FragColor = vec4(lit, clamp(alpha, 0.0, 1.0));
+        #include <fog_fragment>
+      }`
+  });
+
+  const mesh = new THREE.InstancedMesh(geo, mat, count);
+  mesh.frustumCulled = false;
+  const d = new THREE.Object3D();
+  const up = new THREE.Vector3(0, 1, 0), iq = new THREE.Quaternion(), worldUpQ = new THREE.Quaternion();
+  for (let i = 0; i < count; i++) {
+    const pl = places[i];
+    d.position.set(pl.x, pl.y, pl.z);
+    if (pl.nrm) {
+      iq.setFromUnitVectors(up, pl.nrm);
+      iq.slerp(worldUpQ, 0.65);
+      d.quaternion.copy(iq);
+      d.rotateY(R(0, 6.28));
+    } else {
+      d.rotation.set(R(-tiltStrength, tiltStrength), R(0, 6.28), R(-tiltStrength, tiltStrength));
+    }
+    d.scale.setScalar(pl.h);
+    d.updateMatrix();
+    mesh.setMatrixAt(i, d.matrix);
+    ph[i] = R(0, 6.28);
+    tn[i] = rand();
+  }
+  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(ph, 1));
+  geo.setAttribute('aTint', new THREE.InstancedBufferAttribute(tn, 1));
+  scene.add(mesh);
+  return mesh;
+}
+
+const guideTargets = [];
+const updaters = [];
+let cameraZones = null;
+
+async function initWorld() {
+  try {
+    const [
+      profiles, sandDiff, sandNor, sandArm, rockDiff, rockNor, rockArm,
+      arameTex, hondawaraTex, starTex, aoriikaTex, sazaeTex, awabiTex, manamakoTex, aoumiushiTex
+    ] = await Promise.all([
+      fetch('assets/bio/profiles.json').then(r => r.json()),
+      loadTex('assets/tex/coast_sand_04_diff.jpg', { srgb: true, repeat: 44 }),
+      loadTex('assets/tex/coast_sand_04_nor_gl.jpg', { srgb: false, repeat: 44 }),
+      loadTex('assets/tex/coast_sand_04_arm.jpg', { srgb: false, repeat: 44 }),
+      loadTex('assets/tex/aerial_rocks_02_diff.jpg', { srgb: true, repeat: 2 }),
+      loadTex('assets/tex/aerial_rocks_02_nor_gl.jpg', { srgb: false, repeat: 2 }),
+      loadTex('assets/tex/aerial_rocks_02_arm.jpg', { srgb: false, repeat: 2 }),
+      loadTex('assets/bio/arame.png', { srgb: true }),
+      loadTex('assets/bio/hondawara.png', { srgb: true }),
+      loadTex('assets/bio/itomakihitode.png', { srgb: true }),
+      loadTex('assets/bio/aoriika.png', { srgb: true }),
+      loadTex('assets/bio/sazae.png', { srgb: true }),
+      loadTex('assets/bio/awabi.png', { srgb: true }),
+      loadTex('assets/bio/manamako.png', { srgb: true }),
+      loadTex('assets/bio/aoumiushi.png', { srgb: true }),
+    ]);
+
+    const fishNames = ['madai', 'ishidai', 'mejina', 'kasago', 'suzumedai', 'nenbutsudai', 'kyusen', 'maaji', 'hiramasa', 'aigo', 'kawahagi', 'isaki', 'mebaru', 'sorasuzumedai', 'kue', 'kurodai'];
+    const fishTex = {};
+    await Promise.all(fishNames.map(async n => {
+      fishTex[n] = await loadTex(`assets/bio/${n}.png`, { srgb: true });
+    }));
+
+    // 1. Seabed terrain (Poly Haven coast_sand_04 PBR)
+    const sandMat = new THREE.MeshStandardMaterial({
+      map: sandDiff, normalMap: sandNor, normalScale: new THREE.Vector2(1.1, 1.1),
+      aoMap: sandArm, roughnessMap: sandArm, roughness: 0.92, metalness: 0.0,
+    });
+    patchUnderwaterStandardMat(sandMat, { key: 'uw_sand', isRock: false, ripple: true });
+    const sandGeo = new THREE.PlaneGeometry(420, 420, 220, 220);
+    sandGeo.rotateX(-Math.PI / 2);
+    const sp = sandGeo.attributes.position;
+    for (let i = 0; i < sp.count; i++) sp.setY(i, floorH(sp.getX(i), sp.getZ(i)));
+    sandGeo.computeVertexNormals();
+    const sandMesh = new THREE.Mesh(sandGeo, sandMat);
+    sandMesh.receiveShadow = true;
+    scene.add(sandMesh);
+
+    // 2. Basalt & Reef Outcrops (Poly Haven aerial_rocks_02 PBR + World Triplanar + 5-octave basalt strata)
+    const rockMat = new THREE.MeshStandardMaterial({
+      map: rockDiff, normalMap: rockNor, normalScale: new THREE.Vector2(1.4, 1.4),
+      aoMap: rockArm, roughnessMap: rockArm, roughness: 0.88, metalness: 0.03,
+    });
+    patchUnderwaterStandardMat(rockMat, { key: 'uw_rock', isRock: true, ripple: false });
+    const rawRockGeo = new THREE.IcosahedronGeometry(1, 5);
+    rawRockGeo.deleteAttribute('uv');
+    const rockGeo = mergeVertices(rawRockGeo, 1e-4);
+    const rp = rockGeo.attributes.position;
+    const rv = new THREE.Vector3();
+    const rockUvs = new Float32Array(rp.count * 2);
+    for (let i = 0; i < rp.count; i++) {
+      rv.fromBufferAttribute(rp, i).normalize();
+      const strata = 0.065 * Math.sin(rv.y * 12.0 + Math.sin(rv.x * 4.5 + rv.z * 3.8) * 1.4);
+      const disp = 1
+        + 0.20 * Math.sin(rv.x * 3.2 + rv.y * 1.9) * Math.cos(rv.z * 3.1 - rv.y * 1.3)
+        + 0.11 * Math.sin(rv.x * 6.8 + rv.z * 5.9 + 0.8)
+        + 0.055 * Math.cos(rv.y * 10.5 - rv.x * 6.2 + rv.z * 5.1)
+        + 0.028 * Math.sin(rv.x * 16.0 + rv.y * 14.0 - rv.z * 13.0)
+        + strata;
+      rv.multiplyScalar(disp);
+      rp.setXYZ(i, rv.x, rv.y, rv.z);
+      rockUvs[i * 2] = 0.5 + rv.x * 0.5;
+      rockUvs[i * 2 + 1] = 0.5 + rv.z * 0.5;
+    }
+    rockGeo.setAttribute('uv', new THREE.BufferAttribute(rockUvs, 2));
+    rockGeo.computeVertexNormals();
+
+    const rockSpecs = [];
+    const reefRocks = [], kelpRocks = [], isoyakeRocks = [];
+    const camAnchors = [[-7.5, -4.0], [2.8, 1.2], [-2.0, 9.2]];
+    const nearCamera = (x, z) => camAnchors.some(([cx, cz]) => Math.hypot(x - cx, z - cz) < 3.2);
+    const pickRockXZ = (cx, cz, rMin, rMax) => {
+      for (let t = 0; t < 30; t++) {
+        const a = R(0, 6.28), r = R(rMin, rMax);
+        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        if (!nearCamera(x, z)) return [x, z];
+      }
+      return [cx + R(1.5, 4.0), cz + R(1.5, 4.0)];
+    };
+
+    // Zone 2 沈み瀬の切り立つ岩礁 (+15, -4)
+    for (let i = 0; i < 18; i++) {
+      const [x, z] = pickRockXZ(15, -4, 0, 8.5);
+      const sx = R(1.8, 3.6), sy = R(1.7, 4.0), sz = R(1.6, 3.4);
+      const rk = { x, y: floorH(x, z) + sy * 0.20, z, sx, sy, sz };
+      rockSpecs.push(rk); reefRocks.push(rk);
+    }
+    // Zone 1 藻場の平岩盤 (-14, -10)
+    for (let i = 0; i < 18; i++) {
+      const [x, z] = pickRockXZ(-14, -10, 0, 11.5);
+      const sx = R(1.6, 3.5), sy = R(0.6, 1.4), sz = R(1.5, 3.2);
+      const rk = { x, y: floorH(x, z) - sy * 0.22, z, sx, sy, sz };
+      rockSpecs.push(rk); kelpRocks.push(rk);
+    }
+    // Zone 3 磯焼けの岩盤 (-2, +18)
+    for (let i = 0; i < 16; i++) {
+      const [x, z] = pickRockXZ(-2, 18, 0, 10.0);
+      const sx = R(1.5, 3.2), sy = R(0.65, 1.5), sz = R(1.4, 3.0);
+      const rk = { x, y: floorH(x, z) - sy * 0.16, z, sx, sy, sz };
+      rockSpecs.push(rk); isoyakeRocks.push(rk);
+    }
+    // 周縁の点在岩礁
+    for (let i = 0; i < 36; i++) {
+      const a = R(0, 6.28), r = R(24, 65);
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const s = R(1.6, 5.2);
+      rockSpecs.push({ x, y: floorH(x, z) - s * 0.25, z, sx: s * R(0.9, 1.5), sy: s * R(0.5, 1.1), sz: s * R(0.9, 1.4) });
+    }
+    const rocks = new THREE.InstancedMesh(rockGeo, rockMat, rockSpecs.length);
+    rocks.castShadow = true;
+    rocks.receiveShadow = true;
+    for (let i = 0; i < rockSpecs.length; i++) {
+      const rk = rockSpecs[i];
+      dummy.position.set(rk.x, rk.y, rk.z);
+      dummy.rotation.set(R(-0.2, 0.2), R(0, 6.28), R(-0.2, 0.2));
+      dummy.scale.set(rk.sx, rk.sy, rk.sz);
+      dummy.updateMatrix();
+      rocks.setMatrixAt(i, dummy.matrix);
+    }
+    rocks.instanceMatrix.needsUpdate = true;
+    rocks.updateMatrixWorld(true);
+    sandMesh.updateMatrixWorld(true);
+    scene.add(rocks);
+
+    // 岩礁上面＋砂地の正確な地表高さ・法線サンプラー (Raycaster)
+    const rc = new THREE.Raycaster();
+    const rcOrig = new THREE.Vector3();
+    const rcDown = new THREE.Vector3(0, -1, 0);
+    const surfaceMeshes = [rocks, sandMesh];
+    function rayHeight(x, z) {
+      rcOrig.set(x, 30, z);
+      rc.set(rcOrig, rcDown);
+      const hits = rc.intersectObjects(surfaceMeshes, false);
+      return hits.length ? hits[0].point.y : floorH(x, z);
+    }
+    function surfaceAt(x, z, outPos, outNrm) {
+      const y = rayHeight(x, z);
+      outPos.set(x, y, z);
+      if (outNrm) {
+        const e = 0.14;
+        const hx = rayHeight(x + e, z) - y;
+        const hz = rayHeight(x, z + e) - y;
+        outNrm.set(-hx, e, -hz).normalize();
+      }
+    }
+
+    // 3. Seaweeds (アラメ & ホンダワラ) anchored flush onto rock/sand surfaces
+    const surfPos = new THREE.Vector3(), surfNrm = new THREE.Vector3();
+    const aramePlaces = Array.from({ length: 185 }, (_, i) => {
+      const inCore = i < 150;
+      const a = R(0, 6.28), r = inCore ? Math.sqrt(rand()) * 11.5 : R(12, 26);
+      const cx = inCore ? -14 : (rand() < 0.5 ? -8 : 13);
+      const cz = inCore ? -10 : (rand() < 0.5 ? -4 : -6);
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      surfaceAt(x, z, surfPos, null);
+      return { x, y: surfPos.y - 0.06, z, h: R(1.15, 2.25) };
+    });
+    makeSeaweedCard(arameTex, profiles.arame.aspect, aramePlaces.length, aramePlaces, { sway: 0.14, warmBack: [0.16, 0.18, 0.05] });
+
+    const hondaPlaces = Array.from({ length: 135 }, (_, i) => {
+      let x, z;
+      for (let t = 0; t < 20; t++) {
+        const a = R(0, 6.28), r = i < 110 ? Math.sqrt(rand()) * 10.5 : R(11, 22);
+        x = -14 + Math.cos(a) * r; z = -10 + Math.sin(a) * r;
+        if (Math.hypot(x - (-7.5), z - (-4.0)) >= 2.8) break;
+      }
+      surfaceAt(x, z, surfPos, null);
+      return { x, y: surfPos.y - 0.1, z, h: R(2.6, 5.6) };
+    });
+    makeSeaweedCard(hondawaraTex, profiles.hondawara.aspect, hondaPlaces.length, hondaPlaces, { sway: 0.18, warmBack: [0.24, 0.20, 0.05] });
+
+    // 岩盤上の幼体アラメ下草群 (藻場の岩肌と高層海藻をつなぐ密な林床層)
+    const understoryPlaces = Array.from({ length: 90 }, () => {
+      const p = new THREE.Vector3(), n = new THREE.Vector3();
+      for (let t = 0; t < 16; t++) {
+        sampleRockSurface(-14, -10, 11.5, 0.08, 0.42, rayHeight, surfaceAt, kelpRocks, p, n);
+        if (Math.hypot(p.x - (-7.5), p.z - (-4.0)) >= 2.2) break;
+      }
+      return { x: p.x, y: p.y - 0.03, z: p.z, h: R(0.45, 0.98), nrm: n };
+    });
+    makeSeaweedCard(arameTex, profiles.arame.aspect, understoryPlaces.length, understoryPlaces, { sway: 0.11, warmBack: [0.18, 0.20, 0.06] });
+
+    // 4. イトマキヒトデ (Bat stars perched flush on rock faces & sand margins)
+    {
+      const starGeo = new THREE.PlaneGeometry(0.28, 0.28 * profiles.itomakihitode.aspect, 6, 6);
+      starGeo.rotateX(-Math.PI / 2);
+      const stp = starGeo.attributes.position;
+      for (let i = 0; i < stp.count; i++) {
+        const r = Math.hypot(stp.getX(i), stp.getZ(i)) / 0.14;
+        stp.setY(i, Math.max(0, 1 - r * r) * 0.032);
+      }
+      starGeo.computeVertexNormals();
+      const starMat = new THREE.MeshStandardMaterial({
+        map: starTex, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.72,
+      });
+      patchUnderwaterStandardMat(starMat, { key: 'uw_star', isRock: false, ripple: false });
+      const NS = 38;
+      const stars = new THREE.InstancedMesh(starGeo, starMat, NS);
+      const up = new THREE.Vector3(0, 1, 0), iq = new THREE.Quaternion();
+      for (let i = 0; i < NS; i++) {
+        const tgt = i < 16 ? [15, -4] : i < 28 ? [-2, 18] : [-14, -10];
+        const a = R(0, 6.28), r = R(1.5, 10.5);
+        const x = tgt[0] + Math.cos(a) * r, z = tgt[1] + Math.sin(a) * r;
+        surfaceAt(x, z, surfPos, surfNrm);
+        dummy.position.copy(surfPos).addScaledVector(surfNrm, 0.025);
+        iq.setFromUnitVectors(up, surfNrm);
+        dummy.quaternion.copy(iq);
+        dummy.rotateY(R(0, 6.28));
+        dummy.scale.setScalar(R(0.85, 1.35));
+        dummy.updateMatrix();
+        stars.setMatrixAt(i, dummy.matrix);
+      }
+      scene.add(stars);
+    }
+
+    // 5. ムラサキウニ (3D sea urchins placed flush on rock tops in Isoyake zone, 28 individuals)
+    const urchinCluster = createUrchins(rayHeight, surfaceAt, isoyakeRocks);
+
+    // 5b. 筑前海・玄界灘の生態系構成要素 (ウミトサカ, サザエ/クロアワビ, アオリイカ卵塊, 食害海藻残株, マナマコ, アオウミウシ)
+    const softCoralCluster = createSoftCorals(rayHeight, surfaceAt, reefRocks);
+    const shellfishCluster = createAbaloneAndTurbanShells(rayHeight, surfaceAt, [...kelpRocks, ...reefRocks], sazaeTex, awabiTex, profiles);
+    createSquidEggs(surfaceAt);
+    createGrazedStipes(rayHeight, surfaceAt, isoyakeRocks, arameTex);
+    const seaCucumberCluster = createSeaCucumbers(rayHeight, surfaceAt, manamakoTex, profiles.manamako);
+    createNudibranchs(rayHeight, surfaceAt, [...reefRocks, ...kelpRocks, ...isoyakeRocks], aoumiushiTex, profiles.aoumiushi);
+
+    // 6. 16種の魚類 (全種実写ハイレゾテクスチャ＋3D胸鰭＆楕円体解剖法線)
+    const fishThickness = { kyusen: 0.12, hiramasa: 0.16, maaji: 0.16, kue: 0.24, kasago: 0.22 };
+    const geo = name => buildFishGeo(profiles[name], fishThickness[name] ?? 0.20);
+
+    // カサゴの岩上着底スポット (沈み瀬と周辺の岩棚の上面)
+    const kasagoSpots = Array.from({ length: 14 }, (_, i) => {
+      const rk = rockSpecs[i % 24];
+      const x = rk.x + R(-0.4, 0.4) * rk.sx, z = rk.z + R(-0.4, 0.4) * rk.sz;
+      surfaceAt(x, z, surfPos, surfNrm);
+      return { x, y: surfPos.y + 0.11, z, rx: R(-0.15, 0.10), ry: R(0, 6.28) };
+    });
+
+    const fishSchools = {
+      hiramasa: new School({
+        geo: geo('hiramasa'), tex: fishTex.hiramasa, count: 6, scale: 0.98, scaleVar: 0.2, spec: 0.52,
+        spread: [4.2, 1.4, 4.2], wiggle: 11, amp: 0.085, lag: 1.6, wob: 0.45,
+        path: (t, o) => o.set(Math.sin(t * 0.055) * 26 + 5, 9.2 + Math.sin(t * 0.09) * 2.2, Math.cos(t * 0.048) * 24 - 2),
+      }),
+      maaji: new School({
+        geo: geo('maaji'), tex: fishTex.maaji, count: 105, scale: 0.26, scaleVar: 0.22, spec: 0.65,
+        spread: [4.0, 1.6, 4.0], wiggle: 15, amp: 0.068, lag: 1.1, wob: 0.28,
+        path: (t, o) => o.set(Math.cos(t * 0.078) * 18 + 8, 7.6 + Math.sin(t * 0.14) * 1.8, Math.sin(t * 0.065) * 16 - 3),
+      }),
+      isaki: new School({
+        geo: geo('isaki'), tex: fishTex.isaki, count: 58, scale: 0.28, scaleVar: 0.22, spec: 0.44,
+        spread: [3.6, 1.3, 3.6], wiggle: 12, amp: 0.07, lag: 1.3, wob: 0.34,
+        path: (t, o) => o.set(12.5 + Math.sin(t * 0.062) * 6.5, 6.8 + Math.sin(t * 0.11) * 1.1, -3.0 + Math.cos(t * 0.054) * 6.5),
+      }),
+      mebaru: new School({
+        geo: geo('mebaru'), tex: fishTex.mebaru, count: 26, scale: 0.22, scaleVar: 0.24, spec: 0.24,
+        spread: [5.0, 1.0, 5.0], wiggle: 7.5, amp: 0.05, lag: 2.0, wob: 0.16,
+        path: (t, o) => o.set(-10.5 + Math.sin(t * 0.028) * 8.0, 3.3 + Math.sin(t * 0.06) * 0.6, -7.5 + Math.cos(t * 0.025) * 7.5),
+      }),
+      sorasuzumedai: new School({
+        geo: geo('sorasuzumedai'), tex: fishTex.sorasuzumedai, count: 85, scale: 0.095, scaleVar: 0.22, spec: 0.34,
+        spread: [3.2, 1.2, 3.2], wiggle: 16, amp: 0.062, lag: 0.9, wob: 0.32,
+        path: (t, o) => o.set(11.8 + Math.sin(t * 0.075) * 4.8, 5.5 + Math.sin(t * 0.14) * 0.85, -3.2 + Math.cos(t * 0.068) * 4.8),
+      }),
+      kue: new School({
+        geo: geo('kue'), tex: fishTex.kue, count: 3, scale: 0.78, scaleVar: 0.16, spec: 0.18,
+        spread: [2.8, 0.5, 2.8], wiggle: 5.5, amp: 0.055, lag: 3.0, wob: 0.22, speed: 0.45,
+        path: (t, o) => o.set(10.5 + Math.sin(t * 0.045) * 4.2, 3.4 + Math.sin(t * 0.07) * 0.3, -1.5 + Math.cos(t * 0.04) * 4.2),
+      }),
+      kurodai: new School({
+        geo: geo('kurodai'), tex: fishTex.kurodai, count: 9, scale: 0.44, scaleVar: 0.20, spec: 0.42,
+        spread: [3.6, 0.9, 3.6], wiggle: 9.0, amp: 0.068, lag: 2.0, wob: 0.36,
+        path: (t, o) => o.set(-6.0 + Math.sin(t * 0.042) * 10.5, 2.6 + Math.sin(t * 0.08) * 0.65, -4.5 + Math.cos(t * 0.036) * 9.5),
+      }),
+      madai: new School({
+        geo: geo('madai'), tex: fishTex.madai, count: 12, scale: 0.50, scaleVar: 0.25, spec: 0.36,
+        spread: [4.8, 1.2, 4.8], wiggle: 8, amp: 0.07, lag: 2.2, wob: 0.45,
+        path: (t, o) => o.set(Math.sin(t * 0.036 + 1.2) * 16 + 2, 3.2 + Math.sin(t * 0.07) * 0.8, Math.cos(t * 0.032) * 15 + 2),
+      }),
+      ishidai: new School({
+        geo: geo('ishidai'), tex: fishTex.ishidai, count: 9, scale: 0.44, scaleVar: 0.24, spec: 0.28,
+        spread: [3.2, 1.1, 3.2], wiggle: 8.5, amp: 0.07, lag: 1.8, wob: 0.42,
+        path: (t, o) => o.set(14 + Math.sin(t * 0.05) * 8, 4.6 + Math.sin(t * 0.08) * 1.1, -4 + Math.cos(t * 0.045) * 8),
+      }),
+      mejina: new School({
+        geo: geo('mejina'), tex: fishTex.mejina, count: 34, scale: 0.36, scaleVar: 0.24, spec: 0.22,
+        spread: [3.8, 1.3, 3.8], wiggle: 10, amp: 0.07, lag: 1.5, wob: 0.38,
+        path: (t, o) => o.set(-10 + Math.sin(t * 0.048) * 11, 4.8 + Math.sin(t * 0.09) * 1.2, -9 + Math.cos(t * 0.042) * 10),
+      }),
+      suzumedai: new School({
+        geo: geo('suzumedai'), tex: fishTex.suzumedai, count: 165, scale: 0.14, scaleVar: 0.22, spec: 0.24,
+        spread: [4.8, 1.8, 4.8], wiggle: 16, amp: 0.065, lag: 1.0, wob: 0.32,
+        path: (t, o) => o.set(-12 + Math.sin(t * 0.06) * 9, 6.4 + Math.sin(t * 0.12) * 1.4, -8 + Math.cos(t * 0.055) * 9),
+      }),
+      nenbutsudai: new School({
+        geo: geo('nenbutsudai'), tex: fishTex.nenbutsudai, count: 80, scale: 0.10, scaleVar: 0.2, spec: 0.30,
+        spread: [2.2, 0.9, 2.2], wiggle: 13, amp: 0.05, lag: 0.9, wob: 0.22,
+        path: (t, o) => o.set(14.5 + Math.sin(t * 0.032) * 3.5, 4.2 + Math.sin(t * 0.07) * 0.6, -3.5 + Math.cos(t * 0.03) * 3.5),
+      }),
+      aigo: new School({
+        geo: geo('aigo'), tex: fishTex.aigo, count: 22, scale: 0.34, scaleVar: 0.22, spec: 0.22,
+        spread: [3.4, 1.0, 3.4], wiggle: 10.5, amp: 0.07, lag: 1.6, wob: 0.4,
+        path: (t, o) => o.set(-4 + Math.sin(t * 0.046) * 8, 3.2 + Math.sin(t * 0.09) * 0.7, 14 + Math.cos(t * 0.04) * 7),
+      }),
+      kyusen: new School({
+        geo: geo('kyusen'), tex: fishTex.kyusen, count: 16, scale: 0.22, scaleVar: 0.24, spec: 0.26,
+        spread: [5.0, 0.6, 5.0], wiggle: 11.5, amp: 0.06, lag: 2.2, wob: 0.45,
+        path: (t, o) => o.set(-9 + Math.cos(t * 0.055) * 9, 1.4, -3 + Math.sin(t * 0.05) * 9),
+      }),
+      kawahagi: new School({
+        geo: geo('kawahagi'), tex: fishTex.kawahagi, count: 11, scale: 0.25, scaleVar: 0.22, spec: 0.16,
+        spread: [3.8, 0.8, 3.8], wiggle: 8, amp: 0.055, lag: 2.4, wob: 0.4,
+        path: (t, o) => o.set(-11 + Math.sin(t * 0.035 + 2) * 8, 2.6 + Math.sin(t * 0.08) * 0.5, -8 + Math.cos(t * 0.03) * 8),
+      }),
+      kasago: new School({
+        geo: geo('kasago'), tex: fishTex.kasago, count: kasagoSpots.length, scale: 0.29, scaleVar: 0.24, spec: 0.18,
+        wiggle: 4.5, stationary: true, places: kasagoSpots,
+      }),
+    };
+
+    Object.values(fishSchools).forEach(s => updaters.push(t => s.update(t)));
+
+    // 7. アオリイカ & ミズクラゲ
+    const squids = createSquids(aoriikaTex, profiles.aoriika);
+    const jellies = createMoonJellies();
+    updaters.push(t => squids.update(t));
+    updaters.push(t => jellies.update(t));
+
+    // 8. 生き物ガイド用アンカー登録
+    guideTargets.push(
+      { name: 'ヒラマサ', desc: '対馬暖流を駆ける玄界灘の大型青物', getPos: o => fishSchools.hiramasa.anchor(o) },
+      { name: 'マアジ', desc: '潮通しの良い瀬の周りに大群をつくる', getPos: o => fishSchools.maaji.anchor(o) },
+      { name: 'イサキ', desc: '筑前海の沈み瀬を象徴する黄褐色縦帯の回遊魚', getPos: o => fishSchools.isaki.anchor(o) },
+      { name: 'クエ (アラ)', desc: '沈み瀬の岩陰に君臨する玄界灘の食物網の頂点', getPos: o => fishSchools.kue.anchor(o) },
+      { name: 'ソラスズメダイ', desc: '対馬暖流に乗って瀬を彩るコバルトブルーの小魚', getPos: o => fishSchools.sorasuzumedai.anchor(o) },
+      { name: 'メバル (クロメバル)', desc: '志賀島の藻場や岩陰で群れてホバリングする', getPos: o => fishSchools.mebaru.anchor(o) },
+      { name: 'クロダイ (チヌ)', desc: '藻場の縁から砂礫地までを巡る沿岸の大型魚', getPos: o => fishSchools.kurodai.anchor(o) },
+      { name: 'マダイ', desc: '玄界灘を代表する桜鯛・岩礁と砂地の境界', getPos: o => fishSchools.madai.anchor(o) },
+      { name: 'イシダイ', desc: '沈み瀬の岩礁を堂々と巡回する縞模様の魚', getPos: o => fishSchools.ishidai.anchor(o) },
+      { name: 'メジナ (クロ)', desc: '藻場や磯の上層で群れをなす', getPos: o => fishSchools.mejina.anchor(o) },
+      { name: 'スズメダイ', desc: '浅場のアラメ場の上で光を受けて舞う', getPos: o => fishSchools.suzumedai.anchor(o) },
+      { name: 'ネンブツダイ', desc: '沈み瀬の岩陰で群れてホバリングする', getPos: o => fishSchools.nenbutsudai.anchor(o) },
+      { name: 'アイゴ (バリ)', desc: '高水温化で活発になり海藻を食べる', getPos: o => fishSchools.aigo.anchor(o) },
+      { name: 'キュウセン', desc: '砂地と海藻の間を縫うように泳ぐベラ', getPos: o => fishSchools.kyusen.anchor(o) },
+      { name: 'カワハギ', desc: '砂地や藻場の縁をホバリングしながら移動', getPos: o => fishSchools.kawahagi.anchor(o) },
+      { name: 'カサゴ (アラカブ)', desc: '岩棚や岩の隙間に着底して獲物を待つ', getPos: o => fishSchools.kasago.anchor(o) },
+      { name: 'アオリイカ (ミズイカ)', desc: '中層を編隊で泳ぎ、藻場に産卵する', getPos: o => squids.getAnchorPos(o) },
+      { name: 'ミズクラゲ', desc: '傘に透ける四つ葉模様が特徴のクラゲ', getPos: o => o.copy(jellies.jellies[0].bell.position) },
+      { name: 'ウミトサカ (ソフトコーラル)', desc: '潮流の速い沈み瀬を彩り小生物の隠れ家となる', getPos: o => o.copy(softCoralCluster.center) },
+      { name: 'サザエ・クロアワビ', desc: '海藻を餌とする筑前海の貴重な磯根資源', getPos: o => o.copy(shellfishCluster.center) },
+      { name: 'マナマコ', desc: '砂地と岩礁の境界で海底の有機物を分解する', getPos: o => o.copy(seaCucumberCluster.center) },
+      { name: 'ムラサキウニ', desc: '海藻を食べ尽くし「磯焼け」を引き起こす', getPos: o => o.copy(urchinCluster.center) },
+      { name: 'アラメ・ホンダワラの藻場', desc: '稚魚やアオリイカの産卵を支える海のゆりかご', getPos: o => o.set(-14, floorH(-14, -10) + 2.2, -10) },
+    );
+
+    // 9. カメラ視点プリセット (自動遊泳が3ゾーンをゆっくり巡る)
+    cameraZones = {
+      auto(t, o) {
+        const x = Math.sin(t * 0.022) * 16 + Math.sin(t * 0.041) * 3.5;
+        const z = Math.cos(t * 0.017) * 15 + 2;
+        const safeY = Math.max(floorH(x, z) + 4.4, rayHeight(x, z) + 2.4);
+        return o.set(x, safeY + Math.sin(t * 0.12) * 0.55, z);
+      },
+      kelp(t, o) {
+        const x = -7.5 + Math.sin(t * 0.05) * 1.4;
+        const z = -4.0 + Math.cos(t * 0.04) * 1.4;
+        return o.set(x, Math.max(floorH(x, z) + 2.8, rayHeight(x, z) + 1.8) + Math.sin(t * 0.15) * 0.3, z);
+      },
+      reef(t, o) {
+        const x = 2.8 + Math.sin(t * 0.045) * 0.9;
+        const z = 1.2 + Math.cos(t * 0.04) * 0.9;
+        return o.set(x, Math.max(floorH(x, z) + 4.8, rayHeight(x, z) + 2.6) + Math.sin(t * 0.14) * 0.3, z);
+      },
+      isoyake(t, o) {
+        const x = -2.0 + Math.sin(t * 0.05) * 1.3;
+        const z = 8.6 + Math.cos(t * 0.04) * 0.9;
+        return o.set(x, Math.max(floorH(x, z) + 3.2, rayHeight(x, z) + 1.8) + Math.sin(t * 0.16) * 0.25, z);
+      },
+    };
+
+    const loading = document.getElementById('loading');
+    loading.style.opacity = 0;
+    setTimeout(() => loading.remove(), 1200);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('error').style.display = 'flex';
+  }
+}
+
+// ---------------------------------------------------------------- camera look & mode switching
+let mode = 'auto';
+let yaw = 0.72, pitch = 0.04, tYaw = yaw, tPitch = pitch;
+let dragging = false, lastX = 0, lastY = 0, lastInteract = -100;
+const cvs = renderer.domElement;
+
+cvs.addEventListener('pointerdown', e => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  cvs.setPointerCapture(e.pointerId); lastInteract = T.value;
+});
+cvs.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  tYaw += (e.clientX - lastX) * 0.0035;
+  tPitch = THREE.MathUtils.clamp(tPitch + (e.clientY - lastY) * 0.0035, -1.15, 1.32);
+  lastX = e.clientX; lastY = e.clientY; lastInteract = T.value;
+});
+const endDrag = () => { dragging = false; };
+cvs.addEventListener('pointerup', endDrag);
+cvs.addEventListener('pointercancel', endDrag);
+
+const zoneTargetYaw = { auto: 0.72, kelp: 0.78, reef: -1.17, isoyake: 3.14 };
+const zoneDescriptions = {
+  auto: '🌊 玄界灘・筑前海 — 対馬暖流が育む「藻場」「沈み瀬」と、環境変化がもたらす「磯焼け」の3つの生態系',
+  kelp: '🌿 藻場（アラメ・クロメ場とホンダワラ類のガラモ場）— 二層の海中林がアオリイカの産卵床となり、稚魚やサザエ・アワビを育む「海のゆりかご」',
+  reef: '🪨 沈み瀬（天然礁・湧昇域）— 対馬暖流が岩礁に衝突して栄養塩が湧き上がり、ウミトサカが群生しイサキ・マアジの大群と王者クエ（アラ）が集う好漁場',
+  isoyake: '🟣 磯焼け（無節サンゴモ平原）— 高水温化とアイゴ・ムラサキウニ等の食害で大型海藻が消失し、白〜淡桃色の石灰藻が岩肌を覆う海域',
+};
+const zoneInfoEl = document.getElementById('zoneInfo');
+document.querySelectorAll('button[data-mode]').forEach(btn => {
+  btn.onclick = () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll('button[data-mode]').forEach(b => b.classList.toggle('active', b === btn));
+    if (zoneInfoEl && zoneDescriptions[mode]) zoneInfoEl.textContent = zoneDescriptions[mode];
+    if (mode !== 'auto') {
+      tYaw = zoneTargetYaw[mode];
+      tPitch = mode === 'isoyake' ? -0.15 : mode === 'reef' ? -0.04 : 0.02;
+      lastInteract = T.value;
+    }
+  };
+});
+
+// ---------------------------------------------------------------- UI: intro, auto-hide, guide, audio, fullscreen
+const intro = document.getElementById('intro');
+setTimeout(() => (intro.style.opacity = 0), 3800);
+
+let idleTimer;
+const wake = () => {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => document.body.classList.add('idle'), 4000);
+};
+['pointermove', 'pointerdown', 'keydown'].forEach(ev => addEventListener(ev, wake));
+wake();
+
+let guideOn = false;
+const guideLayer = document.getElementById('guideLayer');
+const guideBtn = document.getElementById('guideBtn');
+guideBtn.onclick = () => {
+  guideOn = !guideOn;
+  guideBtn.classList.toggle('active', guideOn);
+  guideLayer.classList.toggle('on', guideOn);
+};
+
+document.getElementById('fsBtn').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen?.();
+};
+
+// Web Audio: 対馬暖流の水中低音・気泡・岩礁のテッポウエビ音
+let audio = null;
+function createAudio() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+  const len = ctx.sampleRate * 8, buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch); let last = 0;
+    for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.4; }
+  }
+  const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 340; lp.Q.value = 0.85;
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 0.065;
+  const lfoG = ctx.createGain(); lfoG.gain.value = 130; lfo.connect(lfoG).connect(lp.frequency);
+  src.connect(lp).connect(master); src.start(); lfo.start();
+
+  const blip = () => {
+    const now = ctx.currentTime, n = Math.random() < 0.3 ? Math.floor(R(2, 6)) : 1;
+    for (let i = 0; i < n; i++) {
+      const t0 = now + i * R(0.05, 0.16), f = R(320, 980);
+      const o = ctx.createOscillator(), g = ctx.createGain(), pan = ctx.createStereoPanner();
+      o.type = 'sine'; o.frequency.setValueAtTime(f, t0); o.frequency.exponentialRampToValueAtTime(f * R(1.7, 2.8), t0 + 0.07);
+      g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(R(0.008, 0.028), t0 + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      pan.pan.value = R(-0.8, 0.8);
+      o.connect(g).connect(pan).connect(master); o.start(t0); o.stop(t0 + 0.16);
+    }
+    setTimeout(blip, R(700, 3800));
+  };
+  blip();
+  return { ctx, master };
+}
+const soundBtn = document.getElementById('soundBtn');
+let soundOn = false;
+soundBtn.onclick = async () => {
+  if (!audio) audio = createAudio();
+  soundOn = !soundOn;
+  const { ctx, master } = audio;
+  if (soundOn) await ctx.resume();
+  master.gain.cancelScheduledValues(ctx.currentTime);
+  master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+  master.gain.linearRampToValueAtTime(soundOn ? 0.58 : 0, ctx.currentTime + 1.4);
+  soundBtn.textContent = soundOn ? '🔊 サウンド' : '🔇 サウンド';
+  soundBtn.classList.toggle('active', soundOn);
+};
+
+// ---------------------------------------------------------------- guide labels updater
+const tagPool = [];
+const gPos = new THREE.Vector3(), gProj = new THREE.Vector3();
+function updateGuideLabels() {
+  if (!guideOn || !guideTargets.length) return;
+  while (tagPool.length < 7) {
+    const el = document.createElement('div');
+    el.className = 'tag';
+    el.innerHTML = '<b></b><span></span>';
+    guideLayer.appendChild(el);
+    tagPool.push(el);
+  }
+  const cand = [];
+  for (const gt of guideTargets) {
+    gt.getPos(gPos);
+    const dist = gPos.distanceTo(camera.position);
+    if (dist > 25 || dist < 1.2) continue;
+    gProj.copy(gPos).project(camera);
+    if (gProj.z < -1 || gProj.z > 1) continue;
+    const sx = (gProj.x * 0.5 + 0.5) * innerWidth;
+    const sy = (-gProj.y * 0.5 + 0.5) * innerHeight;
+    if (sx < 70 || sx > innerWidth - 70 || sy < 50 || sy > innerHeight - 90) continue;
+    cand.push({ gt, dist, sx, sy });
+  }
+  cand.sort((a, b) => a.dist - b.dist);
+  const placed = [];
+  for (const c of cand) {
+    if (placed.some(p => Math.abs(p.sx - c.sx) < 135 && Math.abs(p.sy - c.sy) < 48)) continue;
+    placed.push(c);
+    if (placed.length >= 7) break;
+  }
+  for (let i = 0; i < tagPool.length; i++) {
+    const el = tagPool[i];
+    if (i < placed.length) {
+      const p = placed[i];
+      el.style.display = 'block';
+      el.style.left = `${p.sx}px`;
+      el.style.top = `${p.sy - 14}px`;
+      el.style.opacity = String(THREE.MathUtils.clamp(1.2 - p.dist / 24, 0.4, 0.95));
+      el.firstElementChild.textContent = p.gt.name;
+      el.lastElementChild.textContent = p.gt.desc;
+    } else {
+      el.style.display = 'none';
+    }
+  }
+}
+
+// ---------------------------------------------------------------- loop & resize
+function onResize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloomPass.setSize(innerWidth, innerHeight);
+  underwaterLensPass.uniforms.uRes.value.set(innerWidth, innerHeight);
+  updatePointScale();
+}
+addEventListener('resize', onResize);
+onResize();
+
+const clock = new THREE.Clock();
+const camTarget = new THREE.Vector3(-4, floorH(-4, 0) + 3.2, 0);
+camera.position.copy(camTarget);
+const sunProj = new THREE.Vector3();
+const camFwd = new THREE.Vector3();
+
+initWorld();
+
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  const t = (T.value += dt);
+
+  if (cameraZones) {
+    cameraZones[mode](t, camTarget);
+    camera.position.lerp(camTarget, 1 - Math.exp(-dt * (mode === 'auto' ? 1.3 : 2.2)));
+  }
+
+  if (t - lastInteract > 8 && !dragging) {
+    if (mode === 'auto') {
+      tYaw += dt * 0.022;
+      tPitch += (0.04 - tPitch) * dt * 0.15;
+    } else {
+      tYaw += Math.sin(t * 0.15) * dt * 0.012;
+    }
+  }
+  const k = 1 - Math.exp(-dt * 4);
+  yaw += (tYaw - yaw) * k;
+  pitch += (tPitch - pitch) * k;
+  camera.rotation.set(
+    pitch + Math.sin(t * 0.21) * 0.014,
+    yaw + Math.sin(t * 0.13) * 0.018,
+    Math.sin(t * 0.28) * 0.01
+  );
+
+  // スクリーンスペース太陽シャフト用の太陽スクリーン座標と可視度更新
+  camera.getWorldDirection(camFwd);
+  const sunAlign = camFwd.dot(SUN_DIR);
+  sunProj.copy(camera.position).addScaledVector(SUN_DIR, 100).project(camera);
+  underwaterLensPass.uniforms.uSunScreen.value.set(sunProj.x * 0.5 + 0.5, sunProj.y * 0.5 + 0.5);
+  underwaterLensPass.uniforms.uSunVis.value = THREE.MathUtils.clamp((sunAlign - 0.12) / 0.65, 0, 1);
+
+  for (const r of rays) {
+    r.rotation.y = Math.atan2(camera.position.x - r.position.x, camera.position.z - r.position.z);
+  }
+  for (const fn of updaters) fn(t);
+  updateGuideLabels();
+
+  composer.render();
+});
+</script>
+</body>
+</html>
